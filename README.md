@@ -60,20 +60,12 @@
 
 ### 1. OCR Flow Chart (데이터 처리)
 
-<p align="center">
-  <img src="https://user-images.githubusercontent.com/username/repo/assets/ocr-flow-chart.png" width="700">
-</p>
-
 1.  **수업계획서 PDF 수집**: 학교 및 교육기관으로부터 수업계획서 PDF 파일을 수집합니다.
 2.  **PDF 유효성 검사**: 수집된 PDF가 텍스트 기반인지 이미지 기반인지 판별합니다.
 3.  **OCR 처리**: 이미지 기반의 PDF일 경우, `PyMuPDF`와 `Tesseract`를 이용해 텍스트를 추출합니다.
 4.  **텍스트 데이터 저장**: 추출된 텍스트 데이터를 정제하여 저장합니다.
 
 ### 2. LLM Flow Chart (모델 및 응답)
-
-<p align="center">
-  <img src="https://user-images.githubusercontent.com/username/repo/assets/llm-flow-chart.png" width="700">
-</p>
 
 1.  **데이터 벡터화**: 정제된 텍스트 데이터를 임베딩 모델을 통해 벡터로 변환합니다.
 2.  **LLM 미세조정**: 변환된 벡터 데이터로 `HyperCLOVA X SEED` 모델을 미세조정하여 도메인 특화 LLM을 생성합니다.
