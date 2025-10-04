@@ -68,18 +68,18 @@ function App() {
           ? { ...session, messages: [...session.messages, { id: idCounter++, from: 'user', text, ts: Date.now() }] }
           : session
       );
-      setTimeout(() => {
-        setSessions(prev2 => {
-          const updated2 = prev2.map((session, i) =>
-            i === idx
-              ? { ...session, messages: [...session.messages, { id: idCounter++, from: 'bot', text: `질문: "${text}" 에 대해 답변을 준비 중입니다. (예시 응답)`, ts: Date.now() }] }
-              : session
-          );
-          return updated2;
-        });
-      }, 100);
       return updated;
     });
+    setTimeout(() => {
+      setSessions(prev2 => {
+        const updated2 = prev2.map((session, i) =>
+          i === idx
+            ? { ...session, messages: [...session.messages, { id: idCounter++, from: 'bot', text: `질문: "${text}" 에 대해 답변을 준비 중입니다. (예시 응답)`, ts: Date.now() }] }
+            : session
+        );
+        return updated2;
+      });
+    }, 100);
   }
 
   function handleSelectSession(idx) {
