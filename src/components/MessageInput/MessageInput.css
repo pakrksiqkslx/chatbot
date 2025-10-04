@@ -1,0 +1,65 @@
+/* Sidebar가 열릴 때 입력창이 sidebar에 가려지지 않도록 우측 여백 */
+.cb-message-input {
+	position: fixed;
+	left: 0;
+	right: 50px; /* 사이드바 너비만큼 띄움 */
+	bottom: 38px; /* Footer 높이만큼 띄움 */
+	padding: 14px 18px 14px 0;
+	border-top: 1px solid #f3f3f3;
+	background: #fff;
+	box-sizing: border-box;
+	z-index: 102;
+}
+.cb-message-input.sidebar-open {
+	right: 410px;
+}
+.cb-input-wrap {
+	position:relative;
+	max-width:100%;
+	display: flex;
+	align-items: center;
+	background: #fff;
+	border: 1px solid #eef2f8;
+	border-radius: 18px;
+	min-height: 46px;
+}
+.cb-message-input textarea {
+	width: 100%;
+	max-width: 1290px;
+	min-height: 46px;
+	max-height: 160px;
+	resize: none;
+	padding: 14px 62px 14px 16px;
+	border-radius: 18px;
+	border: none;
+	font-size: 14px;
+	outline: none;
+	background: transparent;
+}
+.cb-send {
+	position:absolute;
+	right:15px;
+	top:50%;
+	transform:translateY(-50%);
+	width:44px;
+	height:44px;
+	border-radius:12px;
+	background:linear-gradient(180deg,#7aa7ff,#5b8ff2);
+	color:#fff;
+	border:0;
+	display:flex;
+	align-items:center;
+	justify-content:center;
+	cursor:pointer;
+	box-shadow: 0 2px 8px rgba(25, 118, 210, 0.08);
+	transition: background 0.18s;
+}
+.cb-send:hover {
+	background: #1976d2;
+}
+.cb-hint {
+	text-align:center;
+	color:#c2c9d1;
+	font-size:12px;
+	margin-top:8px;
+}

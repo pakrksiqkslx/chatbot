@@ -1,0 +1,22 @@
+/* Sidebar가 열릴 때 footer가 sidebar에 가려지지 않도록 우측 여백 */
+.footer {
+  transition: padding-right 0.22s;
+}
+.cb-footer-hint {
+  font-size: 13px;
+  color: #8b98a8;
+  padding: 8px 0 8px 0;
+  text-align: center;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  background: #fff;
+  z-index: 101;
+  z-index: 101;
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.03);
+  border-radius: 12px 12px 0 0;
+  padding: 10px 0 10px 0;
+  border-top: none;
+}

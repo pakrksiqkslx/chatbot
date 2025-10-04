@@ -1,0 +1,13 @@
+.cb-message-row { display:flex; margin-bottom:22px; align-items:flex-start; }
+.cb-message-row.bot { justify-content:flex-start; }
+.cb-message-row.user { justify-content:flex-end; }
+.cb-avatar-small { width:36px; height:36px; border-radius:50%; background:linear-gradient(180deg,#f7fbff,#eef6ff); border:1px solid #e6eefc; margin-right:12px; }
+.cb-message-col { display:flex; flex-direction:column; }
+.cb-message-col.user-col { align-items:flex-end; }
+.cb-message-bubble { max-width:60%; padding:14px 16px; border-radius:16px; background:var(--muted); color:#222; box-shadow:0 1px 0 rgba(0,0,0,0.02); }
+.cb-message-bubble.bot { border-top-left-radius:6px; }
+.cb-message-bubble.user { background:#fff; border:1px solid #f0f0f0; border-top-right-radius:6px; }
+.cb-message-text { white-space:pre-wrap; font-size:15px; line-height:1.5; }
+.cb-message-time { margin-top:8px; font-size:12px; color:#9aa3ad; }
+.cb-message-time.user-time { text-align:right; }
+.cb-user-chip { background:#f5f7fb; padding:10px 12px; border-radius:12px; border:1px solid #f0f0f0; display:inline-block; }
