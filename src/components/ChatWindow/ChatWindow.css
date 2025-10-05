@@ -1,0 +1,12 @@
+.cb-chat-window {
+	display: flex;
+	flex-direction: column;
+	position: fixed;
+	top: 64px; /* 헤더 높이 */
+	left: 0;
+	right: 56px; /* 툴바 너비 */
+	bottom: 64px; /* 입력창+푸터 높이 */
+	box-sizing: border-box;
+	background: #fff;
+	z-index: 10;
+}
