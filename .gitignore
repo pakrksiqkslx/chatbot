@@ -1,3 +1,18 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# production
+/build
+
+# misc
+.DS_Store
 # 가상환경
 venv/
 env/
@@ -37,57 +52,6 @@ MANIFEST
 .env.test.local
 .env.production.local
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# 로그 파일
-*.log
-logs/
-
-# 임시 파일
-*.tmp
-*.temp
-temp/
-tmp/
-
-# 모델 파일 (용량이 큰 파일들)
-*.bin
-*.safetensors
-models/
-checkpoints/
-
-# 데이터 파일
-*.csv
-*.json
-*.pkl
-*.pickle
-data/
-
-# 캐시
-.cache/
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# Streamlit
-.streamlit/
-
-# API 키나 민감한 정보
-config.py
-secrets.json
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

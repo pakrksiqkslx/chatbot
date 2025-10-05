@@ -1,0 +1,9 @@
+.cb-message-list {
+	flex: 1;
+	overflow-y: auto;
+	padding: 28px 32px;
+	height: 100%;
+	box-sizing: border-box;
+}
+.cb-message-list::-webkit-scrollbar { width:10px; }
+.cb-message-list::-webkit-scrollbar-thumb { background:#eee; border-radius:6px; }
