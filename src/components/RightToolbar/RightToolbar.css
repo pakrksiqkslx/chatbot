@@ -1,0 +1,46 @@
+        .rightbar-toolbar-22 {
+            position: fixed;
+            top: 0;
+            right: 0;
+            height: 100vh;
+            width: 56px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            background: #fafbfc;
+            border-left: 1px solid #f0f0f0;
+            z-index: 200;
+            box-shadow: none;
+            padding-bottom: 500px; /* 설정 아래에 공간 추가 */
+        }
+    .rightbar-toolbar-22.rightbar-toolbar-22--left {
+        right: 360px !important;
+    }
+.rightbar-toolbar-22__btn {
+    background: none;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 50px;
+    box-shadow: none;
+    padding: 0;
+    transition: none;
+}
+
+/* 마지막 버튼(설정)에만 적용: 아래 공간 띄우기 */
+.rightbar-toolbar-22__btn:last-child {
+    margin-bottom: 32px;
+}
+.rightbar-toolbar-22__icon {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    object-fit: contain;
+}
