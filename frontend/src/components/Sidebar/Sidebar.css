@@ -5,14 +5,14 @@
     flex-direction: column;
     width: 360px;
     position: fixed;
-    right: 0;
+    right: 56px; /* 툴바 너비만큼 여백 추가 */
     top: 0;
     bottom: 0;
     transform: translateX(100%);
     transition: transform .22s ease;
     background: #fafafa;
     border-left: 1px solid #f0f0f0;
-    z-index: 200;
+    z-index: 190; /* 툴바(200)보다 낮게 설정 */
 }
 
 .sidebar--open {

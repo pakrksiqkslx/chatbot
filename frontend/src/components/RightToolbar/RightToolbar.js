@@ -10,10 +10,9 @@ import './RightToolbar.css';
 
 
 export default function RightToolbar({ onToggle, sidebarOpen, onNewChat, onLoginClick, onLogoutClick, isLoggedIn }) {
-  const toolbarClass = sidebarOpen ? 'rightbar-toolbar-22 rightbar-toolbar-22--left' : 'rightbar-toolbar-22';
   
   return (
-    <nav className={toolbarClass} aria-label="오른쪽 툴바">
+    <nav className="rightbar-toolbar-22" aria-label="오른쪽 툴바">
       <div className="rightbar-toolbar-22__top">
         <button className="rightbar-toolbar-22__btn" onClick={onToggle} aria-label="메뉴">
           <img src="/아이콘/세점.png" alt="메뉴" className="rightbar-toolbar-22__icon" />

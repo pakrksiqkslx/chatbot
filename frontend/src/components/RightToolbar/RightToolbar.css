@@ -14,9 +14,6 @@
             box-shadow: none;
             padding-bottom: 500px; /* 설정 아래에 공간 추가 */
         }
-    .rightbar-toolbar-22.rightbar-toolbar-22--left {
-        right: 360px !important;
-    }
 .rightbar-toolbar-22__btn {
     background: none;
     border: none;
