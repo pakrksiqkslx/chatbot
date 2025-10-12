@@ -30,6 +30,7 @@
     box-shadow: none;
     padding: 0;
     transition: none;
+    position: relative; /* 아이콘 위치 기준점 설정 */
 }
 
 /* 마지막 버튼(설정)에만 적용: 아래 공간 띄우기 */
@@ -39,8 +40,21 @@
 .rightbar-toolbar-22__icon {
     width: 36px;
     height: 36px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: block; /* flex 대신 block 사용 */
     object-fit: contain;
+    margin: auto; /* 자동 중앙 정렬 */
+}
+
+/* 로그인 관련 아이콘들만 별도 크기 조정 */
+.rightbar-toolbar-22__auth-icon {
+    width: 24px !important;
+    height: 24px !important;
+    margin: auto !important; /* 중앙 정렬 강제 적용 */
+}
+
+/* 로그아웃 아이콘만 더 작게 */
+.rightbar-toolbar-22__logout-icon {
+    width: 16px !important;
+    height: 16px !important;
+    margin: auto !important; /* 중앙 정렬 강제 적용 */
 }
