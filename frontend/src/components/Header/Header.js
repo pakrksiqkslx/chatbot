@@ -6,7 +6,7 @@ export default function Header({ title }) {
     <div className="header">
       <div className="header__left">
         <div className="header__avatar">
-          <img src="/메인아이콘.png" alt="메인 아이콘" className="header__avatar-img" />
+          <img src="/아이콘/메인아이콘.png" alt="메인 아이콘" className="header__avatar-img" />
         </div>
         <div className="header__title-wrap">
           <div className="header__title">{title}</div>
