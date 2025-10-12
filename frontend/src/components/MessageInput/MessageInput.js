@@ -22,7 +22,7 @@ export default function MessageInput({ onSend, sidebarOpen }) {
     <div className={`cb-message-input${sidebarOpen ? ' sidebar-open' : ''}`}>
       <div className="cb-input-wrap">
         <textarea
-          placeholder="메시지를 입력하세요..."
+          placeholder="메세지를 입력하세요..."
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
