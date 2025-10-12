@@ -91,6 +91,12 @@ function App() {
     setPendingSession(makeDefaultSession());
   }
 
+  function handleLogout() {
+    setUser(null);
+    setShowLogin(false);
+    setShowSignup(false);
+  }
+
   // 로그인 화면이 우선적으로 보이도록 분기
   if (!user && showLogin) {
     return (
@@ -145,6 +151,8 @@ function App() {
           setShowLogin(true);
           setShowSignup(false);
         }}
+        onLogoutClick={handleLogout}
+        isLoggedIn={!!user}
       />
       <Footer />
     </div>
