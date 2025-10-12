@@ -11,12 +11,11 @@ export default function MessageItem({ message }) {
   if (!isUser) {
     return (
       <div className="cb-message-row bot">
-        <div className="cb-avatar-small" />
         <div className="cb-message-col">
           <div className="cb-message-bubble bot">
             <div className="cb-message-text">{message.text}</div>
           </div>
-          <div className="cb-message-time">{formatTime(message.ts)}</div>
+          <div className="cb-message-time bot-time">{formatTime(message.ts)}</div>
         </div>
       </div>
     );

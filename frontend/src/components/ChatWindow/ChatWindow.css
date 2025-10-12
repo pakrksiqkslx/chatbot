@@ -3,10 +3,16 @@
 	flex-direction: column;
 	position: fixed;
 	top: 64px; /* 헤더 높이 */
-	left: 0;
+	left: -10px; /* 오른쪽으로 이동 */
 	right: 56px; /* 툴바 너비 */
-	bottom: 64px; /* 입력창+푸터 높이 */
+	bottom: 100px; /* 입력창+푸터 높이 증가 */
 	box-sizing: border-box;
 	background: #fff;
 	z-index: 10;
+	transition: right 0.22s ease; /* 부드러운 전환 효과 */
+}
+
+/* 사이드바가 열릴 때 채팅창 크기 조정 */
+.cb-chat-window.sidebar-open {
+	right: 416px; /* 툴바(56px) + 사이드바(360px) */
 }
