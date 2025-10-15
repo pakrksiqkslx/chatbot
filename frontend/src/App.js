@@ -7,6 +7,7 @@ import Signup from './components/Signup/Signup';
 import Sidebar from './components/Sidebar/Sidebar';
 import RightToolbar from './components/RightToolbar/RightToolbar';
 import Footer from './components/Footer/Footer';
+import StudyPlan from './components/StudyPlan/StudyPlan';
 
 
 let idCounter = 1;
@@ -30,6 +31,7 @@ function App() {
   const [user, setUser] = useState(null);
   const [showSignup, setShowSignup] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
+  const [currentPage, setCurrentPage] = useState('chat'); // 페이지 상태 추가
 
   React.useEffect(() => {
     currentSessionIdxRef.current = currentSessionIdx;
@@ -125,6 +127,27 @@ function App() {
     );
   }
 
+  // StudyPlan 페이지
+  if (currentPage === 'studyplan') {
+    return (
+      <div className="app-bg">
+        <Header title="교수용 수업계획서" />
+        <div style={{ 
+          paddingTop: '0px', 
+          paddingBottom: '45px', 
+          minHeight: '100vh',
+          boxSizing: 'border-box' 
+        }}>
+          <StudyPlan />
+        </div>
+        <Footer 
+          currentPage={currentPage}
+          onPageChange={setCurrentPage}
+        />
+      </div>
+    );
+  }
+
   // 챗봇 UI
   return (
     <div className="app-bg">
@@ -154,7 +177,10 @@ function App() {
         onLogoutClick={handleLogout}
         isLoggedIn={!!user}
       />
-      <Footer />
+      <Footer 
+        currentPage={currentPage}
+        onPageChange={setCurrentPage}
+      />
     </div>
   );
 }
