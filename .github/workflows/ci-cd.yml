@@ -1,20 +1,33 @@
-name: CI/CD Pipeline
+name: CI/CD Pipeline to AWS
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
 
+# 1. AWS 배포에 필요한 환경 변수 설정
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  AWS_REGION: ap-southeast-2                  # 본인의 AWS 리전
+  ECR_BACKEND_REPOSITORY: chatbot-backend     # 백엔드 ECR 리포지토리 이름
+  ECR_FRONTEND_REPOSITORY: chatbot-frontend   # 프론트엔드 ECR 리포지토리 이름
+  ECS_CLUSTER_NAME: chatbot-ec2-cluster       # ECS 클러스터 이름
+  ECS_SERVICE_NAME: chatbot-service           # ECS 서비스 이름
+  ECS_TASK_DEFINITION: app-task-definition    # ECS 작업 정의 이름
+  CONTAINER_BACKEND_NAME: backend-container   # 작업 정의 내부의 백엔드 컨테이너 이름
+  CONTAINER_FRONTEND_NAME: frontend-container # 작업 정의 내부의 프론트엔드 컨테이너 이름
+
+# 2. AWS OIDC 인증을 위한 권한 추가
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   test:
     runs-on: ubuntu-latest
     
     steps:
+    # --- test job은 기존과 동일합니다 (수정 없음) ---
     - name: Checkout code
       uses: actions/checkout@v4
       
@@ -40,84 +53,61 @@ jobs:
     - name: Run tests (if available)
       run: |
         cd backend
-        # 테스트가 있다면 실행
-        # python -m pytest tests/ || echo "No tests found"
         echo "Tests placeholder - add your tests here"
         
-    - name: Lint with flake8 (if available)
-      run: |
-        cd backend
-        # flake8가 설치되어 있다면 실행
-        # pip install flake8
-        # flake8 . || echo "No flake8 configuration found"
-        echo "Linting placeholder - add your linting tools here"
-
   build-and-push:
     needs: test
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
-    
-    permissions:
-      contents: read
-      packages: write
-      
+    # 7. 배포 job에서 이미지 URI를 사용할 수 있도록 outputs 설정
+    outputs:
+      backend_image_uri: ${{ steps.build-backend-image.outputs.image_uri }}
+      frontend_image_uri: ${{ steps.build-frontend-image.outputs.image_uri }}
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
-    - name: Log in to Container Registry
-      uses: docker/login-action@v3
+
+    # 3. AWS OIDC 역할로 로그인
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
       with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-        
-    - name: Extract metadata for backend
-      id: meta-backend
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
-          
-    - name: Extract metadata for frontend
-      id: meta-frontend
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
-          
+        role-to-assume: ${{ secrets.ROLE_ARN }} # GitHub Secrets에 저장된 역할 ARN 사용
+        aws-region: ${{ env.AWS_REGION }}
+
+    # 4. Amazon ECR 로그인
+    - name: Log in to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
       
+    # 5. 백엔드 이미지 빌드 및 ECR로 푸시
     - name: Build and push backend image
+      id: build-backend-image
       uses: docker/build-push-action@v5
       with:
         context: ./backend
-        target: production
         push: true
-        tags: ${{ steps.meta-backend.outputs.tags }}
-        labels: ${{ steps.meta-backend.outputs.labels }}
+        # 이미지 태그: ECR 주소/리포지토리:커밋해시
+        tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_BACKEND_REPOSITORY }}:${{ github.sha }}
         cache-from: type=gha,scope=backend
         cache-to: type=gha,mode=max,scope=backend
-        
+        # 8. 배포 job에서 사용할 수 있도록 전체 이미지 URI를 output으로 설정
+        outputs: type=image,name=image_uri,push=true
+
+    # 6. 프론트엔드 이미지 빌드 및 ECR로 푸시
     - name: Build and push frontend image
+      id: build-frontend-image
       uses: docker/build-push-action@v5
       with:
         context: ./frontend
-        target: production
         push: true
-        tags: ${{ steps.meta-frontend.outputs.tags }}
-        labels: ${{ steps.meta-frontend.outputs.labels }}
+        tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_FRONTEND_REPOSITORY }}:${{ github.sha }}
         cache-from: type=gha,scope=frontend
         cache-to: type=gha,mode=max,scope=frontend
+        outputs: type=image,name=image_uri,push=true
 
   deploy:
     needs: build-and-push
@@ -125,11 +115,47 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     
     steps:
-    - name: Deploy to production
+    # --- 9. deploy job에도 AWS 인증이 필요합니다 ---
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    # --- 10. 기존 deploy placeholder를 실제 ECS 배포 명령어로 교체 ---
+    - name: Create new Task Definition with new images
+      id: task-def
       run: |
-        echo "Deploy to production placeholder"
-        echo "Add your deployment commands here"
-        # 예시:
-        # - kubectl apply -f k8s/
-        # - docker-compose -f docker-compose.prod.yml up -d
-        # - ssh user@server "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend:main && docker-compose up -d"
+        # 현재 활성화된 작업 정의를 다운로드
+        TASK_DEF_JSON=$(aws ecs describe-task-definition --task-definition $ECS_TASK_DEFINITION --query taskDefinition)
+
+        # jq를 사용해 2개의 새 이미지 URI로 교체
+        NEW_TASK_DEF_JSON=$(echo $TASK_DEF_JSON | \
+          jq --arg IMAGE_BACKEND "${{ needs.build-and-push.outputs.backend_image_uri }}" \
+             --arg CONTAINER_BACKEND "$CONTAINER_BACKEND_NAME" \
+             '( .containerDefinitions[] | select(.name == $CONTAINER_BACKEND) ).image = $IMAGE_BACKEND' | \
+          jq --arg IMAGE_FRONTEND "${{ needs.build-and-push.outputs.frontend_image_uri }}" \
+             --arg CONTAINER_FRONTEND "$CONTAINER_FRONTEND_NAME" \
+             '( .containerDefinitions[] | select(.name == $CONTAINER_FRONTEND) ).image = $IMAGE_FRONTEND')
+        
+        # AWS에 새 작업 정의 등록
+        # family, taskRoleArn 등 필요한 키만 추출하여 새 개정(revision)을 등록
+        NEW_TASK_DEF_REGISTER=$(aws ecs register-task-definition \
+          --family "$(echo $NEW_TASK_DEF_JSON | jq -r .family)" \
+          --container-definitions "$(echo $NEW_TASK_DEF_JSON | jq .containerDefinitions)" \
+          --task-role-arn "$(echo $NEW_TASK_DEF_JSON | jq -r .taskRoleArn)" \
+          --execution-role-arn "$(echo $NEW_TASK_DEF_JSON | jq -r .executionRoleArn)" \
+          --network-mode "$(echo $NEW_TASK_DEF_JSON | jq -r .networkMode)" \
+          --requires-compatibilities '["EC2"]' \
+          --volumes "$(echo $NEW_TASK_DEF_JSON | jq .volumes)")
+          
+        # 방금 등록된 새 작업 정의의 ARN을 출력
+        NEW_REVISION_ARN=$(echo $NEW_TASK_DEF_REGISTER | jq -r '.taskDefinition.taskDefinitionArn')
+        echo "::set-output name=task_definition_arn::$NEW_REVISION_ARN"
+
+    - name: Deploy new Task Definition to ECS Service
+      run: |
+        aws ecs update-service \
+          --cluster ${{ env.ECS_CLUSTER_NAME }} \
+          --service ${{ env.ECS_SERVICE_NAME }} \
+          --task-definition ${{ steps.task-def.outputs.task_definition_arn }}
