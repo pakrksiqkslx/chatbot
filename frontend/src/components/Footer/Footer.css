@@ -1,0 +1,72 @@
+/* Sidebar가 열릴 때 footer가 sidebar에 가려지지 않도록 우측 여백 */
+.footer {
+  transition: padding-right 0.22s;
+}
+
+.cb-footer-hint {
+  font-size: 13px;
+  color: #8b98a8;
+  padding: 8px 20px;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  background: #fff;
+  z-index: 101;
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.03);
+  border-radius: 12px 12px 0 0;
+  border-top: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+}
+
+.footer-left {
+  flex: 0 0 auto;
+}
+
+.footer-center {
+  flex: 1;
+  text-align: center;
+}
+
+.study-plan-btn {
+  background: linear-gradient(180deg, #7aa7ff, #5b8ff2);
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.study-plan-btn:hover {
+  background: linear-gradient(180deg, #6a97ef, #4b7fe2);
+  transform: translateY(-1px);
+}
+
+.study-plan-btn:active {
+  transform: translateY(0);
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .cb-footer-hint {
+    padding: 8px 15px;
+    font-size: 12px;
+  }
+  
+  .study-plan-btn {
+    font-size: 11px;
+    padding: 5px 10px;
+  }
+  
+  .footer-center {
+    font-size: 11px;
+  }
+}
