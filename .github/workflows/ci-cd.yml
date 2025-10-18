@@ -8,14 +8,18 @@ on:
 
 # 1. AWS 배포에 필요한 환경 변수 설정
 env:
-  AWS_REGION: ap-southeast-2                  # 본인의 AWS 리전
-  ECR_BACKEND_REPOSITORY: chatbot-backend     # 백엔드 ECR 리포지토리 이름
-  ECR_FRONTEND_REPOSITORY: chatbot-frontend   # 프론트엔드 ECR 리포지토리 이름
-  ECS_CLUSTER_NAME: chatbot-ec2-cluster       # ECS 클러스터 이름
-  ECS_SERVICE_NAME: chatbot-service           # ECS 서비스 이름
-  ECS_TASK_DEFINITION: app-task-definition    # ECS 작업 정의 이름
-  CONTAINER_BACKEND_NAME: backend-container   # 작업 정의 내부의 백엔드 컨테이너 이름
-  CONTAINER_FRONTEND_NAME: frontend-container # 작업 정의 내부의 프론트엔드 컨테이너 이름
+  # ------------------------------------------------------------------
+  # :warning: 이 8개의 값을 본인의 AWS 환경에 맞게 수정하세요
+  # ------------------------------------------------------------------
+  AWS_REGION: ap-southeast-2                  # 1. AWS 리전 (예: ap-northeast-2)
+  ECR_BACKEND_REPOSITORY: chatbot-backend     # 2. 백엔드 ECR 리포지토리 이름
+  ECR_FRONTEND_REPOSITORY: chatbot-frontend   # 3. 프론트엔드 ECR 리포지토리 이름
+  ECS_CLUSTER_NAME: chatbot-ec2-cluster       # 4. ECS 클러스터 이름
+  ECS_SERVICE_NAME: chatbot-service           # 5. ECS 서비스 이름
+  ECS_TASK_DEFINITION: app-task-definition    # 6. ECS 작업 정의 이름
+  CONTAINER_BACKEND_NAME: backend-container   # 7. 작업 정의 내부의 백엔드 컨테이너 이름
+  CONTAINER_FRONTEND_NAME: frontend-container # 8. 작업 정의 내부의 프론트엔드 컨테이너 이름
+  # ------------------------------------------------------------------
 
 # 2. AWS OIDC 인증을 위한 권한 추가
 permissions:
@@ -27,7 +31,6 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    # --- test job은 기존과 동일합니다 (수정 없음) ---
     - name: Checkout code
       uses: actions/checkout@v4
       
@@ -59,7 +62,6 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
-    # 1. deploy 작업이 읽을 수 있도록 job outputs 정의
     outputs:
       backend_image_uri: ${{ steps.set-output-uris.outputs.backend_uri }}
       frontend_image_uri: ${{ steps.set-output-uris.outputs.frontend_uri }}
@@ -78,7 +80,6 @@ jobs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
-    # 2. 이미지 URI를 미리 정의 (새로 추가된 스텝)
     - name: Define image URIs
       id: define-uris
       run: |
@@ -94,10 +95,9 @@ jobs:
       with:
         context: ./backend
         push: true
-        tags: ${{ env.BACKEND_URI }} # 3. 미리 정의한 URI 사용
+        tags: ${{ env.BACKEND_URI }}
         cache-from: type=gha,scope=backend
         cache-to: type=gha,mode=max,scope=backend
-        # 4. 잘못된 outputs 파라미터 삭제
 
     - name: Build and push frontend image
       id: build-frontend-image
@@ -105,12 +105,10 @@ jobs:
       with:
         context: ./frontend
         push: true
-        tags: ${{ env.FRONTEND_URI }} # 5. 미리 정의한 URI 사용
+        tags: ${{ env.FRONTEND_URI }}
         cache-from: type=gha,scope=frontend
         cache-to: type=gha,mode=max,scope=frontend
-        # 6. 잘못된 outputs 파라미터 삭제
           
-    # 7. Job outputs 설정 (새로 추가된 스텝)
     - name: Set job outputs
       id: set-output-uris
       run: |
@@ -123,21 +121,17 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     
     steps:
-    # --- 9. deploy job에도 AWS 인증이 필요합니다 ---
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ secrets.ROLE_ARN }}
         aws-region: ${{ env.AWS_REGION }}
 
-    # --- 10. 기존 deploy placeholder를 실제 ECS 배포 명령어로 교체 ---
     - name: Create new Task Definition with new images
       id: task-def
       run: |
-        # 현재 활성화된 작업 정의를 다운로드
         TASK_DEF_JSON=$(aws ecs describe-task-definition --task-definition $ECS_TASK_DEFINITION --query taskDefinition)
 
-        # jq를 사용해 2개의 새 이미지 URI로 교체
         NEW_TASK_DEF_JSON=$(echo $TASK_DEF_JSON | \
           jq --arg IMAGE_BACKEND "${{ needs.build-and-push.outputs.backend_image_uri }}" \
              --arg CONTAINER_BACKEND "$CONTAINER_BACKEND_NAME" \
@@ -146,18 +140,16 @@ jobs:
              --arg CONTAINER_FRONTEND "$CONTAINER_FRONTEND_NAME" \
              '( .containerDefinitions[] | select(.name == $CONTAINER_FRONTEND) ).image = $IMAGE_FRONTEND')
         
-        # AWS에 새 작업 정의 등록
-        # family, taskRoleArn 등 필요한 키만 추출하여 새 개정(revision)을 등록
+        # 'taskRoleArn'이 null일 경우를 처리하도록 수정된 부분
         NEW_TASK_DEF_REGISTER=$(aws ecs register-task-definition \
           --family "$(echo $NEW_TASK_DEF_JSON | jq -r .family)" \
           --container-definitions "$(echo $NEW_TASK_DEF_JSON | jq .containerDefinitions)" \
-          --task-role-arn "$(echo $NEW_TASK_DEF_JSON | jq -r .taskRoleArn)" \
+          --task-role-arn "$(echo $NEW_TASK_DEF_JSON | jq -r '.taskRoleArn // empty')" \
           --execution-role-arn "$(echo $NEW_TASK_DEF_JSON | jq -r .executionRoleArn)" \
           --network-mode "$(echo $NEW_TASK_DEF_JSON | jq -r .networkMode)" \
           --requires-compatibilities '["EC2"]' \
-          --volumes "$(echo $NEW_TASK_DEF_JSON | jq .volumes)")
+          --volumes "$(echo $NEW_TASK_DEF_JSON | jq '.volumes // []')")
           
-        # 방금 등록된 새 작업 정의의 ARN을 출력
         NEW_REVISION_ARN=$(echo $NEW_TASK_DEF_REGISTER | jq -r '.taskDefinition.taskDefinitionArn')
         echo "::set-output name=task_definition_arn::$NEW_REVISION_ARN"
 
