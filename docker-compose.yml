@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    ports:
+      - "5000:5000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ENVIRONMENT=development
+    volumes:
+      - ./backend:/app
+      - backend_cache:/app/.cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - chatbot-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://backend:5000
+      - NODE_ENV=production
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - chatbot-network
+
+  # 개발 환경용 서비스 (선택사항)
+  backend-dev:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: builder
+    ports:
+      - "5001:5000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ENVIRONMENT=development
+    volumes:
+      - ./backend:/app
+      - backend_cache:/app/.cache
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000", "--reload"]
+    profiles:
+      - dev
+    networks:
+      - chatbot-network
+
+  frontend-dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: builder
+    ports:
+      - "3001:3000"
+    environment:
+      - REACT_APP_API_URL=http://backend-dev:5000
+      - NODE_ENV=development
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: ["npm", "start"]
+    profiles:
+      - dev
+    networks:
+      - chatbot-network
+
+volumes:
+  backend_cache:
+    driver: local
+
+networks:
+  chatbot-network:
+    driver: bridge
