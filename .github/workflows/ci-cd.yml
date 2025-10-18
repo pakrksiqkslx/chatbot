@@ -59,55 +59,63 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
-    # 7. 배포 job에서 이미지 URI를 사용할 수 있도록 outputs 설정
+    # 1. deploy 작업이 읽을 수 있도록 job outputs 정의
     outputs:
-      backend_image_uri: ${{ steps.build-backend-image.outputs.image_uri }}
-      frontend_image_uri: ${{ steps.build-frontend-image.outputs.image_uri }}
+      backend_image_uri: ${{ steps.set-output-uris.outputs.backend_uri }}
+      frontend_image_uri: ${{ steps.set-output-uris.outputs.frontend_uri }}
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    # 3. AWS OIDC 역할로 로그인
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: ${{ secrets.ROLE_ARN }} # GitHub Secrets에 저장된 역할 ARN 사용
+        role-to-assume: ${{ secrets.ROLE_ARN }}
         aws-region: ${{ env.AWS_REGION }}
 
-    # 4. Amazon ECR 로그인
     - name: Log in to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
+    # 2. 이미지 URI를 미리 정의 (새로 추가된 스텝)
+    - name: Define image URIs
+      id: define-uris
+      run: |
+        echo "BACKEND_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_BACKEND_REPOSITORY }}:${{ github.sha }}" >> $GITHUB_ENV
+        echo "FRONTEND_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_FRONTEND_REPOSITORY }}:${{ github.sha }}" >> $GITHUB_ENV
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
       
-    # 5. 백엔드 이미지 빌드 및 ECR로 푸시
     - name: Build and push backend image
       id: build-backend-image
       uses: docker/build-push-action@v5
       with:
         context: ./backend
         push: true
-        # 이미지 태그: ECR 주소/리포지토리:커밋해시
-        tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_BACKEND_REPOSITORY }}:${{ github.sha }}
+        tags: ${{ env.BACKEND_URI }} # 3. 미리 정의한 URI 사용
         cache-from: type=gha,scope=backend
         cache-to: type=gha,mode=max,scope=backend
-        # 8. 배포 job에서 사용할 수 있도록 전체 이미지 URI를 output으로 설정
-        outputs: type=image,name=image_uri,push=true
+        # 4. 잘못된 outputs 파라미터 삭제
 
-    # 6. 프론트엔드 이미지 빌드 및 ECR로 푸시
     - name: Build and push frontend image
       id: build-frontend-image
       uses: docker/build-push-action@v5
       with:
         context: ./frontend
         push: true
-        tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_FRONTEND_REPOSITORY }}:${{ github.sha }}
+        tags: ${{ env.FRONTEND_URI }} # 5. 미리 정의한 URI 사용
         cache-from: type=gha,scope=frontend
         cache-to: type=gha,mode=max,scope=frontend
-        outputs: type=image,name=image_uri,push=true
+        # 6. 잘못된 outputs 파라미터 삭제
+          
+    # 7. Job outputs 설정 (새로 추가된 스텝)
+    - name: Set job outputs
+      id: set-output-uris
+      run: |
+        echo "backend_uri=${{ env.BACKEND_URI }}" >> $GITHUB_OUTPUT
+        echo "frontend_uri=${{ env.FRONTEND_URI }}" >> $GITHUB_OUTPUT
 
   deploy:
     needs: build-and-push
