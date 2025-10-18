@@ -1,0 +1,4 @@
+/* Sidebar가 열릴 때 app-center-box가 sidebar에 가려지지 않도록 우측 패딩 적용 */
+.app-center-box {
+	transition: padding-right 0.22s;
+}
