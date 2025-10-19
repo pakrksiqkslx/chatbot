@@ -134,7 +134,7 @@ docker-compose logs -f frontend
 # .env 파일 생성
 cat > .env << EOF
 # HyperCLOVA X API
-HYPERCLOVA_API_KEY=nv-93ec8a8d596946b2b2314d70dcdba676qLCw
+HYPERCLOVA_API_KEY=your-hyperclova-api-key-here
 HYPERCLOVA_REQUEST_ID=
 
 # 서버 설정
