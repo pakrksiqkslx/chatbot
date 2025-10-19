@@ -140,18 +140,31 @@ jobs:
              --arg CONTAINER_FRONTEND "frontend-container" \
              '( .containerDefinitions[] | select(.name == $CONTAINER_FRONTEND) ).image = $IMAGE_FRONTEND')
         
-        # taskRoleArn 처리: 값이 있으면 사용하고, null이면 빈 값("") 사용
-        TASK_ROLE_ARN=$(echo $NEW_TASK_DEF_JSON | jq -r '.taskRoleArn // ""')
+        # taskRoleArn 처리: null이거나 잘못된 값인 경우 파라미터 자체를 제외
+        TASK_ROLE_ARN=$(echo $NEW_TASK_DEF_JSON | jq -r '.taskRoleArn // empty')
         echo "🔍 Task Role ARN: '$TASK_ROLE_ARN'"
         
-        NEW_TASK_DEF_REGISTER=$(aws ecs register-task-definition \
-          --family "$(echo $NEW_TASK_DEF_JSON | jq -r .family)" \
-          --container-definitions "$(echo $NEW_TASK_DEF_JSON | jq .containerDefinitions)" \
-          --task-role-arn "$TASK_ROLE_ARN" \
-          --execution-role-arn "$(echo $NEW_TASK_DEF_JSON | jq -r .executionRoleArn)" \
-          --network-mode "$(echo $NEW_TASK_DEF_JSON | jq -r .networkMode)" \
-          --requires-compatibilities '["EC2"]' \
-          --volumes "$(echo $NEW_TASK_DEF_JSON | jq '.volumes // []')")
+        # taskRoleArn이 유효한 ARN인지 확인 (null, empty, 잘못된 형식 제외)
+        if [[ "$TASK_ROLE_ARN" =~ ^arn:aws:iam::[0-9]+:role/[a-zA-Z0-9+=,.@_-]+$ ]]; then
+          echo "✅ Valid taskRoleArn found, using it"
+          NEW_TASK_DEF_REGISTER=$(aws ecs register-task-definition \
+            --family "$(echo $NEW_TASK_DEF_JSON | jq -r .family)" \
+            --container-definitions "$(echo $NEW_TASK_DEF_JSON | jq .containerDefinitions)" \
+            --task-role-arn "$TASK_ROLE_ARN" \
+            --execution-role-arn "$(echo $NEW_TASK_DEF_JSON | jq -r .executionRoleArn)" \
+            --network-mode "$(echo $NEW_TASK_DEF_JSON | jq -r .networkMode)" \
+            --requires-compatibilities '["EC2"]' \
+            --volumes "$(echo $NEW_TASK_DEF_JSON | jq '.volumes // []')")
+        else
+          echo "⚠️ Invalid or null taskRoleArn, registering without it"
+          NEW_TASK_DEF_REGISTER=$(aws ecs register-task-definition \
+            --family "$(echo $NEW_TASK_DEF_JSON | jq -r .family)" \
+            --container-definitions "$(echo $NEW_TASK_DEF_JSON | jq .containerDefinitions)" \
+            --execution-role-arn "$(echo $NEW_TASK_DEF_JSON | jq -r .executionRoleArn)" \
+            --network-mode "$(echo $NEW_TASK_DEF_JSON | jq -r .networkMode)" \
+            --requires-compatibilities '["EC2"]' \
+            --volumes "$(echo $NEW_TASK_DEF_JSON | jq '.volumes // []')")
+        fi
           
         NEW_REVISION_ARN=$(echo $NEW_TASK_DEF_REGISTER | jq -r '.taskDefinition.taskDefinitionArn')
         echo "task_definition_arn=$NEW_REVISION_ARN" >> $GITHUB_OUTPUT
