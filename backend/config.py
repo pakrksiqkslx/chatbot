@@ -21,7 +21,7 @@ class Settings:
     
     # 보안 설정
     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-this")
-    ALLOWED_ORIGINS: list = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+    ALLOWED_ORIGINS: list = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000").split(",")
     
     # 로깅 설정
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
@@ -29,10 +29,16 @@ class Settings:
     # 데이터베이스 설정
     DATABASE_URL: Optional[str] = os.getenv("DATABASE_URL")
     
-    # 외부 API 설정
-    OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
-    MILVUS_HOST: str = os.getenv("MILVUS_HOST", "localhost")
-    MILVUS_PORT: int = int(os.getenv("MILVUS_PORT", "19530"))
+    # 외부 API 설정 - HyperCLOVA X
+    HYPERCLOVA_API_KEY: str = os.getenv("HYPERCLOVA_API_KEY", "nv-93ec8a8d596946b2b2314d70dcdba676qLCw")
+    HYPERCLOVA_API_GATEWAY_KEY: Optional[str] = os.getenv("HYPERCLOVA_API_GATEWAY_KEY")
+    HYPERCLOVA_REQUEST_ID: Optional[str] = os.getenv("HYPERCLOVA_REQUEST_ID")
+    
+    # FAISS 벡터 스토어 설정
+    VECTORSTORE_PATH: str = os.getenv(
+        "VECTORSTORE_PATH", 
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), "vectorstore", "faiss_index")
+    )
     
     # 모니터링 설정
     ENABLE_METRICS: bool = os.getenv("ENABLE_METRICS", "true").lower() == "true"
