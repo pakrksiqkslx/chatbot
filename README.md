@@ -105,12 +105,15 @@
     ```
 
 4.  **환경변수 설정**
-    `backend` 디렉토리에 `.env` 파일을 생성하고 아래 내용을 채워주세요.
+    프로젝트 루트에 `.env` 파일을 생성하고 아래 내용을 채워주세요.
     ```env
-    PINECONE_API_KEY="YOUR_PINECONE_API_KEY"
-    NAVER_CLIENT_ID="YOUR_NAVER_API_CLIENT_ID"
-    NAVER_CLIENT_SECRET="YOUR_NAVER_API_CLIENT_SECRET"
+    HYPERCLOVA_API_KEY=your-hyperclova-api-key-here
     ```
+    
+    **실제 API 키 발급 방법:**
+    - CLOVA Studio (https://clovastudio.ncloud.com/) 접속
+    - 새 앱 생성 후 API 키 발급
+    - 발급받은 키를 `.env` 파일에 입력
 
 5.  **Backend 서버 실행**
     ```sh
