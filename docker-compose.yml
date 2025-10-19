@@ -11,7 +11,7 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - ENVIRONMENT=development
-      - HYPERCLOVA_API_KEY=nv-93ec8a8d596946b2b2314d70dcdba676qLCw
+      - HYPERCLOVA_API_KEY=${HYPERCLOVA_API_KEY:-}
       - VECTORSTORE_PATH=/app/vectorstore/faiss_index
       - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
     volumes:

@@ -30,7 +30,7 @@ class Settings:
     DATABASE_URL: Optional[str] = os.getenv("DATABASE_URL")
     
     # 외부 API 설정 - HyperCLOVA X
-    HYPERCLOVA_API_KEY: str = os.getenv("HYPERCLOVA_API_KEY", "nv-93ec8a8d596946b2b2314d70dcdba676qLCw")
+    HYPERCLOVA_API_KEY: str = os.getenv("HYPERCLOVA_API_KEY", "")
     HYPERCLOVA_API_GATEWAY_KEY: Optional[str] = os.getenv("HYPERCLOVA_API_GATEWAY_KEY")
     HYPERCLOVA_REQUEST_ID: Optional[str] = os.getenv("HYPERCLOVA_REQUEST_ID")
     
