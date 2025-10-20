@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [ main ]
 
-# --- AWS 환경 변수 설정 (이 부분은 본인 값으로 채워야 합니다) ---
 env:
   AWS_REGION: ap-southeast-2
   ECR_BACKEND_REPOSITORY: chatbot-backend
@@ -16,8 +15,8 @@ env:
   ECS_TASK_DEFINITION: app-task-definition
   CONTAINER_BACKEND_NAME: backend-container
   CONTAINER_FRONTEND_NAME: frontend-container
+  # ------------------------------------------------------------------
 
-# --- AWS OIDC 인증을 위한 권한 설정 ---
 permissions:
   id-token: write
   contents: read
@@ -26,7 +25,6 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      # --- 테스트 작업은 기존과 동일합니다 ---
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Set up Python
@@ -41,7 +39,7 @@ jobs:
       - name: Run tests (if available)
         run: |
           cd backend
-          echo "Tests placeholder"
+          echo "Tests placeholder - add your tests here"
 
   build-and-push:
     needs: test
@@ -53,28 +51,21 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      # --- 여기서 'github_ec2_ecs_role'을 사용합니다 ---
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.ROLE_ARN }} # ROLE_ARN Secret에 저장된 'github_ec2_ecs_role'의 ARN
+          role-to-assume: ${{ secrets.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-
       - name: Log in to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
-
       - name: Define image URIs
         id: define-uris
         run: |
           echo "BACKEND_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_BACKEND_REPOSITORY }}:${{ github.sha }}" >> $GITHUB_ENV
           echo "FRONTEND_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_FRONTEND_REPOSITORY }}:${{ github.sha }}" >> $GITHUB_ENV
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        
-      # --- 빌드 대상을 AWS ECR로 변경 ---
       - name: Build and push backend image
         uses: docker/build-push-action@v5
         with:
@@ -83,7 +74,6 @@ jobs:
           tags: ${{ env.BACKEND_URI }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
-
       - name: Build and push frontend image
         uses: docker/build-push-action@v5
         with:
@@ -92,7 +82,6 @@ jobs:
           tags: ${{ env.FRONTEND_URI }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
-            
       - name: Set job outputs
         id: set-output-uris
         run: |
@@ -110,13 +99,12 @@ jobs:
           role-to-assume: ${{ secrets.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # --- 임시 코드를 실제 ECS 배포 코드로 교체 ---
       - name: Deploy to Amazon ECS
         run: |
-          # 현재 작업 정의 다운로드
+          # 1. 현재 작업 정의 다운로드
           TASK_DEF_JSON=$(aws ecs describe-task-definition --task-definition $ECS_TASK_DEFINITION --query taskDefinition)
 
-          # 새 이미지 주소로 교체
+          # 2. 새 이미지 주소로 교체
           NEW_TASK_DEF_JSON=$(echo $TASK_DEF_JSON | \
             jq --arg IMAGE_BACKEND "${{ needs.build-and-push.outputs.backend_image_uri }}" \
                --arg CONTAINER_BACKEND "$CONTAINER_BACKEND_NAME" \
@@ -124,26 +112,20 @@ jobs:
             jq --arg IMAGE_FRONTEND "${{ needs.build-and-push.outputs.frontend_image_uri }}" \
                --arg CONTAINER_FRONTEND "$CONTAINER_FRONTEND_NAME" \
                '( .containerDefinitions[] | select(.name == $CONTAINER_FRONTEND) ).image = $IMAGE_FRONTEND')
-          
-          # 등록에 필요한 키만 추출하여 'role/null' 오류 방지
-          NEW_TASK_DEF_INPUT=$(echo $NEW_TASK_DEF_JSON | jq '{
-              family: .family,
-              taskRoleArn: .taskRoleArn,
-              executionRoleArn: .executionRoleArn,
-              networkMode: .networkMode,
-              containerDefinitions: .containerDefinitions,
-              volumes: .volumes,
-              placementConstraints: .placementConstraints,
-              requiresCompatibilities: .requiresCompatibilities,
-              cpu: .cpu,
-              memory: .memory
-          }')
 
-          # 새 작업 정의 등록
-          NEW_TASK_DEF_REGISTER=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEF_INPUT")
+          # 3. 새 작업 정의 등록 
+          NEW_TASK_DEF_REGISTER=$(aws ecs register-task-definition \
+            --family "$(echo $NEW_TASK_DEF_JSON | jq -r .family)" \
+            --container-definitions "$(echo $NEW_TASK_DEF_JSON | jq .containerDefinitions)" \
+            --task-role-arn "$(echo $NEW_TASK_DEF_JSON | jq -r '.taskRoleArn // empty')" \
+            --execution-role-arn "$(echo $NEW_TASK_DEF_JSON | jq -r .executionRoleArn)" \
+            --network-mode "$(echo $NEW_TASK_DEF_JSON | jq -r .networkMode)" \
+            --requires-compatibilities '["EC2"]' \
+            --volumes "$(echo $NEW_TASK_DEF_JSON | jq '.volumes // []')")
+            
           NEW_REVISION_ARN=$(echo $NEW_TASK_DEF_REGISTER | jq -r '.taskDefinition.taskDefinitionArn')
           
-          # 서비스 업데이트
+          # 4. 서비스 업데이트
           aws ecs update-service \
             --cluster $ECS_CLUSTER_NAME \
             --service $ECS_SERVICE_NAME \
