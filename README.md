@@ -86,15 +86,18 @@
 ### ⚡ 팀원용 초간단 실행 (권장)
 
 ```bash
-# 1. 클론
+# 1. 저장소 클론
 git clone https://github.com/ley38107/chatbot.git
 cd chatbot
 
-# 2. 자동 설정 및 실행
-setup-for-team.bat
+# 2. Docker 실행
+docker-compose up --build
 ```
 
-**끝!** 🎉 브라우저에서 http://localhost:3000 접속
+**끝!** 🎉 
+- 브라우저에서 http://localhost:3000 접속
+- **`.env` 파일 생성 불필요** - API 키가 `docker-compose.yml`에 이미 설정되어 있음
+- **벡터화 과정 불필요** - PINECONE DB에 이미 데이터가 저장되어 있음
 
 ### 🔧 수동 설정 방법
 
@@ -117,10 +120,11 @@ setup-for-team.bat
     pip install -r requirements.txt
     ```
 
-4.  **환경변수 설정**
-    프로젝트 루트에 `.env` 파일을 생성하고 아래 내용을 채워주세요.
+4.  **환경변수 설정 (선택사항)**
     
-    **PINECONE 사용 (권장):**
+    **Docker 사용 시**: 환경변수 설정이 **불필요**합니다. `docker-compose.yml`에 이미 설정되어 있습니다.
+    
+    **로컬 개발 시**: 프로젝트 루트에 `.env` 파일을 생성하고 아래 내용을 채워주세요.
     ```env
     PINECONE_API_KEY=your-pinecone-api-key-here
     HYPERCLOVA_API_KEY=your-hyperclova-api-key-here

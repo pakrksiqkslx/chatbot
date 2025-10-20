@@ -8,18 +8,16 @@ services:
       target: production
     ports:
       - "5000:5000"
-    env_file:
-      - .env  # 로컬 테스트용 (.env 파일이 있으면 사용)
     environment:
       - PYTHONUNBUFFERED=1
       - ENVIRONMENT=development
       - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
-      # 환경변수 우선순위: .env 파일 > 시스템 환경변수 > 하드코딩 기본값
-      - HYPERCLOVA_API_KEY=${HYPERCLOVA_API_KEY:-nv-93ec8a8d596946b2b2314d70dcdba676qLCw}
-      - PINECONE_API_KEY=${PINECONE_API_KEY:-pcsk_2gNHZ_ChuVt8WRLZwrFuvV8jH1LLAaqNJgSGTreVyFmN5B6p2GVxznjLaySDQKD38nXcv}
-      - PINECONE_ENVIRONMENT=${PINECONE_ENVIRONMENT:-us-east-1-aws}
-      - PINECONE_INDEX_NAME=${PINECONE_INDEX_NAME:-chatbot-courses}
-      - USE_PINECONE=${USE_PINECONE:-true}
+      # API 키 (직접 설정 - .env 파일 불필요)
+      - HYPERCLOVA_API_KEY=nv-93ec8a8d596946b2b2314d70dcdba676qLCw
+      - PINECONE_API_KEY=pcsk_2gNHZ_ChuVt8WRLZwrFuvV8jH1LLAaqNJgSGTreVyFmN5B6p2GVxznjLaySDQKD38nXcv
+      - PINECONE_ENVIRONMENT=us-east-1
+      - PINECONE_INDEX_NAME=chatbot-courses
+      - USE_PINECONE=true
     volumes:
       - ./backend:/app
       - ./vectorstore:/app/vectorstore  # 벡터스토어 마운트
