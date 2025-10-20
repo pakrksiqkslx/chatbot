@@ -11,9 +11,17 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - ENVIRONMENT=development
+      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+      # API 키 (환경변수에서 가져옴)
+      - HYPERCLOVA_API_KEY=${HYPERCLOVA_API_KEY}
+      - PINECONE_API_KEY=${PINECONE_API_KEY}
+      - PINECONE_ENVIRONMENT=${PINECONE_ENVIRONMENT:-us-east-1}
+      - PINECONE_INDEX_NAME=${PINECONE_INDEX_NAME:-chatbot-courses}
+      - USE_PINECONE=${USE_PINECONE:-true}
     volumes:
       - ./backend:/app
-      - backend_cache:/app/.cache
+      - ./vectorstore:/app/vectorstore  # 벡터스토어 마운트
+      - backend_cache:/app/.cache  # HuggingFace 캐시 볼륨
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000/health')"]
@@ -32,7 +40,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - REACT_APP_API_URL=http://backend:5000
+      - REACT_APP_API_URL=http://localhost:5000
       - NODE_ENV=production
     depends_on:
       backend:
