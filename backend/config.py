@@ -3,6 +3,29 @@
 """
 import os
 from typing import Optional
+from pathlib import Path
+from dotenv import load_dotenv
+
+# .env 파일 로드 (backend/.env 또는 프로젝트 루트의 .env)
+backend_env = Path(__file__).parent / ".env"
+root_env = Path(__file__).parent.parent / ".env"
+
+if backend_env.exists():
+    try:
+        load_dotenv(backend_env, encoding='utf-8')
+    except UnicodeDecodeError:
+        try:
+            load_dotenv(backend_env, encoding='utf-16')
+        except:
+            pass  # .env 파일을 읽을 수 없으면 환경변수에서 직접 읽음
+elif root_env.exists():
+    try:
+        load_dotenv(root_env, encoding='utf-8')
+    except UnicodeDecodeError:
+        try:
+            load_dotenv(root_env, encoding='utf-16')
+        except:
+            pass  # .env 파일을 읽을 수 없으면 환경변수에서 직접 읽음
 
 
 class Settings:
@@ -34,11 +57,19 @@ class Settings:
     HYPERCLOVA_API_GATEWAY_KEY: Optional[str] = os.getenv("HYPERCLOVA_API_GATEWAY_KEY")
     HYPERCLOVA_REQUEST_ID: Optional[str] = os.getenv("HYPERCLOVA_REQUEST_ID")
     
-    # FAISS 벡터 스토어 설정
+    # 벡터 스토어 설정 (PINECONE 우선, FAISS 폴백)
+    PINECONE_API_KEY: str = os.getenv("PINECONE_API_KEY", "")
+    PINECONE_ENVIRONMENT: str = os.getenv("PINECONE_ENVIRONMENT", "")
+    PINECONE_INDEX_NAME: str = os.getenv("PINECONE_INDEX_NAME", "chatbot-courses")
+    
+    # FAISS 벡터 스토어 설정 (폴백용)
     VECTORSTORE_PATH: str = os.getenv(
         "VECTORSTORE_PATH", 
         os.path.join(os.path.dirname(os.path.dirname(__file__)), "vectorstore", "faiss_index")
     )
+    
+    # 벡터 스토어 타입 설정
+    USE_PINECONE: bool = os.getenv("USE_PINECONE", "true").lower() == "true"
     
     # 모니터링 설정
     ENABLE_METRICS: bool = os.getenv("ENABLE_METRICS", "true").lower() == "true"

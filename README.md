@@ -80,15 +80,28 @@
 
 ### 사전 준비
 
--   Node.js (v18 이상)
--   Python (v3.9 이상)
+-   Docker Desktop 설치 및 실행
+-   Git 설치
 
-### 설치 및 실행
+### ⚡ 팀원용 초간단 실행 (권장)
+
+```bash
+# 1. 클론
+git clone https://github.com/ley38107/chatbot.git
+cd chatbot
+
+# 2. 자동 설정 및 실행
+setup-for-team.bat
+```
+
+**끝!** 🎉 브라우저에서 http://localhost:3000 접속
+
+### 🔧 수동 설정 방법
 
 1.  **프로젝트 클론**
     ```sh
-    git clone [https://github.com/your-username/your-repository-name.git](https://github.com/your-username/your-repository-name.git)
-    cd your-repository-name
+    git clone https://github.com/ley38107/chatbot.git
+    cd chatbot
     ```
 
 2.  **Frontend 설정**
@@ -106,16 +119,35 @@
 
 4.  **환경변수 설정**
     프로젝트 루트에 `.env` 파일을 생성하고 아래 내용을 채워주세요.
+    
+    **PINECONE 사용 (권장):**
     ```env
+    PINECONE_API_KEY=your-pinecone-api-key-here
     HYPERCLOVA_API_KEY=your-hyperclova-api-key-here
+    USE_PINECONE=true
     ```
     
-    **실제 API 키 발급 방법:**
-    - CLOVA Studio (https://clovastudio.ncloud.com/) 접속
-    - 새 앱 생성 후 API 키 발급
-    - 발급받은 키를 `.env` 파일에 입력
+    **FAISS 사용 (폴백):**
+    ```env
+    HYPERCLOVA_API_KEY=your-hyperclova-api-key-here
+    USE_PINECONE=false
+    ```
+    
+    **API 키 발급 방법:**
+    - **PINECONE**: https://www.pinecone.io/ → API Keys
+    - **HyperCLOVA X**: https://clovastudio.ncloud.com/ → 새 앱 생성
 
-5.  **Backend 서버 실행**
+5.  **벡터화 (FAISS 사용 시만)**
+    ```sh
+    python vectorize_courses.py
+    ```
+
+6.  **Docker로 실행 (권장)**
+    ```sh
+    docker-start.bat
+    ```
+    
+    **또는 수동 실행:**
     ```sh
     uvicorn main:app --reload
     ```

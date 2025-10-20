@@ -1,11 +1,11 @@
 """
-FAISS 벡터 스토어 검색 서비스
+벡터 스토어 검색 서비스 (PINECONE 우선, FAISS 폴백)
 """
 import os
 from typing import List, Dict, Any
 from pathlib import Path
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS, Pinecone
 from config import settings
 import logging
 
@@ -13,16 +13,17 @@ logger = logging.getLogger(__name__)
 
 
 class VectorStoreService:
-    """FAISS 벡터 스토어 검색 서비스"""
+    """벡터 스토어 검색 서비스 (PINECONE 우선, FAISS 폴백)"""
     
     def __init__(self, vectorstore_path: str = None):
         """
         Args:
-            vectorstore_path: FAISS 인덱스 경로
+            vectorstore_path: FAISS 인덱스 경로 (PINECONE 사용 시 무시됨)
         """
         self.vectorstore_path = vectorstore_path or settings.VECTORSTORE_PATH
         self.embeddings = None
         self.vectorstore = None
+        self.use_pinecone = settings.USE_PINECONE
         self._initialize()
     
     def _initialize(self):
@@ -38,19 +39,31 @@ class VectorStoreService:
                 encode_kwargs={'normalize_embeddings': True}
             )
             
-            # FAISS 벡터 스토어 로드
-            vectorstore_path = Path(self.vectorstore_path)
-            if not vectorstore_path.exists():
-                raise FileNotFoundError(
-                    f"벡터 스토어를 찾을 수 없습니다: {self.vectorstore_path}"
+            if self.use_pinecone and settings.PINECONE_API_KEY:
+                # PINECONE 벡터 스토어 로드
+                logger.info("PINECONE 벡터 스토어 로딩 중...")
+                self.vectorstore = Pinecone.from_existing_index(
+                    index_name=settings.PINECONE_INDEX_NAME,
+                    embedding=self.embeddings
                 )
-            
-            logger.info(f"FAISS 인덱스 로딩 중: {self.vectorstore_path}")
-            self.vectorstore = FAISS.load_local(
-                str(vectorstore_path),
-                self.embeddings,
-                allow_dangerous_deserialization=True
-            )
+                logger.info(f"PINECONE 벡터 스토어 로딩 완료: {settings.PINECONE_INDEX_NAME}")
+                
+            else:
+                # FAISS 벡터 스토어 로드 (폴백)
+                logger.info("FAISS 벡터 스토어 로딩 중...")
+                vectorstore_path = Path(self.vectorstore_path)
+                if not vectorstore_path.exists():
+                    raise FileNotFoundError(
+                        f"벡터 스토어를 찾을 수 없습니다: {self.vectorstore_path}"
+                    )
+                
+                logger.info(f"FAISS 인덱스 로딩 중: {self.vectorstore_path}")
+                self.vectorstore = FAISS.load_local(
+                    str(vectorstore_path),
+                    self.embeddings,
+                    allow_dangerous_deserialization=True
+                )
+                logger.info("FAISS 벡터 스토어 로딩 완료!")
             
             logger.info("벡터 스토어 초기화 완료!")
             
