@@ -216,15 +216,83 @@ class DirectPineconeVectorizer:
                     }
                 })
         
+        # 교수님별 수업 목록 문서 생성 (추가)
+        print("\n[교수님별 수업 목록 문서 생성 중...]")
+        professor_courses = {}
+        
+        # 교수님별로 수업 수집
+        for course_code, course_info in self.courses_data.items():
+            if "교과목 운영" in course_info:
+                운영정보 = course_info["교과목 운영"]
+                professor = 운영정보.get("담당교수", "")
+                course_name = 운영정보.get("교과목", course_code)
+                
+                if professor and professor not in professor_courses:
+                    professor_courses[professor] = []
+                
+                if professor and course_name:
+                    professor_courses[professor].append({
+                        "course_name": course_name,
+                        "course_code": course_code,
+                        "time_credit": 운영정보.get("시간/학점", ""),
+                        "classification": 운영정보.get("이수구분", ""),
+                        "contact": 운영정보.get("연락처", ""),
+                        "email": 운영정보.get("E-Mail", "")
+                    })
+        
+        # 각 교수님에 대한 전용 문서 생성
+        for professor, courses in professor_courses.items():
+            if len(courses) > 0:  # 수업이 있는 교수님만
+                text = f"[담당교수] {professor}\n"
+                text += f"[담당수업수] 총 {len(courses)}개\n\n"
+                
+                text += "[담당수업목록]\n"
+                for i, course in enumerate(courses, 1):
+                    text += f"{i}. {course['course_name']} ({course['course_code']})\n"
+                    text += f"   - 시간/학점: {course['time_credit']}\n"
+                    text += f"   - 이수구분: {course['classification']}\n"
+                    if course['contact']:
+                        text += f"   - 연락처: {course['contact']}\n"
+                    if course['email']:
+                        text += f"   - 이메일: {course['email']}\n"
+                    text += "\n"
+                
+                # 교수님 이름을 강조하기 위해 반복 추가
+                text += f"\n{professor} 교수님의 수업입니다. {professor} 교수님이 담당하는 모든 수업입니다."
+                
+                documents.append({
+                    "text": text,
+                    "metadata": {
+                        "course_name": f"{professor} 교수님 전체 수업",
+                        "professor": professor,
+                        "section": "교수님별 수업 목록",
+                        "course_code": "PROFESSOR_LIST",
+                        "course_count": len(courses)
+                    }
+                })
+        
         print(f"[총 {len(documents)}개 문서 생성 완료]")
         return documents
     
-    def create_and_save_vectorstore(self, index_name: str = "chatbot-courses"):
-        """PINECONE에 벡터 저장"""
+    def create_and_save_vectorstore(self, index_name: str = "chatbot-courses", reset: bool = True):
+        """
+        PINECONE에 벡터 저장
+        
+        Args:
+            index_name: Pinecone 인덱스 이름
+            reset: True이면 기존 데이터 삭제 후 재생성 (기본값: True)
+        """
         # 문서 생성
         documents = self._create_course_documents()
         
         print(f"\n[PINECONE 벡터 스토어 생성 중: {index_name}]")
+        
+        # 기존 인덱스가 있으면 삭제 (reset=True인 경우)
+        if reset and index_name in self.pc.list_indexes().names():
+            print(f"[기존 PINECONE 인덱스 삭제 중: {index_name}]")
+            self.pc.delete_index(index_name)
+            print(f"[기존 인덱스 삭제 완료]")
+            time.sleep(5)  # 인덱스 삭제 완료 대기
         
         # 인덱스가 존재하지 않으면 생성
         if index_name not in self.pc.list_indexes().names():
@@ -239,6 +307,7 @@ class DirectPineconeVectorizer:
                 )
             )
             print(f"[PINECONE 인덱스 생성 완료: {index_name}]")
+            time.sleep(10)  # 인덱스 생성 완료 대기
         
         # 인덱스 연결
         index = self.pc.Index(index_name)
@@ -350,8 +419,8 @@ def main():
     # 벡터라이저 생성
     vectorizer = DirectPineconeVectorizer(json_path="utils/output.json")
     
-    # 벡터 스토어 생성 및 저장
-    index = vectorizer.create_and_save_vectorstore(index_name="chatbot-courses")
+    # 벡터 스토어 생성 및 저장 (기존 데이터 삭제 후 재생성)
+    index = vectorizer.create_and_save_vectorstore(index_name="chatbot-courses", reset=True)
     
     print("\n" + "=" * 60)
     print("[PINECONE 벡터화 완료!]")
