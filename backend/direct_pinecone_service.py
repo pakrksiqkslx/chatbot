@@ -31,7 +31,6 @@ class DirectPineconeVectorStoreService:
         self.embeddings = None
         self.pc = None
         self.index = None
-        self.use_pinecone = settings.USE_PINECONE
         self._initialize()
     
     def _initialize(self):
@@ -46,17 +45,16 @@ class DirectPineconeVectorStoreService:
             logger.info("임베딩 모델 초기화 완료")
             
             # PINECONE 초기화
-            if self.use_pinecone and settings.PINECONE_API_KEY:
+            if settings.PINECONE_API_KEY:
                 self.pc = Pinecone(api_key=settings.PINECONE_API_KEY)
                 self.index = self.pc.Index(settings.PINECONE_INDEX_NAME)
                 logger.info(f"PINECONE 벡터 스토어 로딩 완료: {settings.PINECONE_INDEX_NAME}")
             else:
-                logger.warning("PINECONE API 키가 설정되지 않았습니다. FAISS를 사용합니다.")
-                self.use_pinecone = False
+                logger.error("PINECONE API 키가 설정되지 않았습니다.")
+                raise ValueError("PINECONE_API_KEY가 필요합니다.")
                 
         except Exception as e:
             logger.error(f"벡터 스토어 초기화 실패: {e}")
-            self.use_pinecone = False
             raise
     
     def similarity_search(self, query: str, k: int = 4) -> List[Dict[str, Any]]:
@@ -71,7 +69,7 @@ class DirectPineconeVectorStoreService:
             검색 결과 리스트
         """
         try:
-            if not self.use_pinecone:
+            if not self.index:
                 raise ValueError("PINECONE이 초기화되지 않았습니다.")
             
             # 쿼리를 벡터로 변환
@@ -87,10 +85,9 @@ class DirectPineconeVectorStoreService:
             # 결과를 LangChain 형식으로 변환
             documents = []
             for match in results.matches:
-                # 메타데이터에서 텍스트 복원 (실제로는 PINECONE에 저장된 텍스트를 사용해야 함)
-                # 현재는 메타데이터만 반환
+                # 실제 본문 텍스트 반환
                 doc = {
-                    "page_content": f"[{match.metadata.get('course_name', 'Unknown')}] {match.metadata.get('section', 'Unknown')}",
+                    "page_content": match.metadata.get("text", ""),  # 실제 본문
                     "metadata": match.metadata
                 }
                 documents.append(doc)

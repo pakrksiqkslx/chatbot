@@ -90,7 +90,7 @@ async def chat(request: ChatRequest):
     """
     수업계획서 기반 챗봇 엔드포인트
     
-    1. FAISS에서 유사 문서 검색
+    1. PINECONE에서 유사 문서 검색
     2. HyperCLOVA X로 답변 생성
     """
     try:
@@ -138,7 +138,10 @@ async def chat(request: ChatRequest):
         
     except Exception as e:
         logger.error(f"채팅 처리 중 오류 발생: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500, 
+            detail="서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+        )
 
 if __name__ == "__main__":
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")

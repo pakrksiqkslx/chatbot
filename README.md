@@ -144,14 +144,8 @@ npm start
     # PINECONE API 키 (필수)
     PINECONE_API_KEY=your-pinecone-api-key-here
     
-    # PINECONE 환경 설정 (선택사항)
-    PINECONE_ENVIRONMENT=us-east-1
-    
     # PINECONE 인덱스 이름 (선택사항)
     PINECONE_INDEX_NAME=chatbot-courses
-    
-    # 벡터 스토어 사용 여부 (선택사항)
-    USE_PINECONE=true
     ```
     
     **API 키 발급 방법:**

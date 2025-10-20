@@ -30,11 +30,7 @@ echo HYPERCLOVA_API_KEY=your-hyperclova-api-key-here
 echo.
 echo # PINECONE 설정 - 실제 API 키로 교체하세요
 echo PINECONE_API_KEY=your-pinecone-api-key-here
-echo PINECONE_ENVIRONMENT=us-east-1
 echo PINECONE_INDEX_NAME=chatbot-courses
-echo.
-echo # 벡터 스토어 설정
-echo USE_PINECONE=true
 echo.
 echo # 서버 설정
 echo PORT=5000
