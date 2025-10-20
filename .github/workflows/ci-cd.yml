@@ -6,19 +6,18 @@ on:
   pull_request:
     branches: [ main ]
 
-# 1. AWS 배포에 필요한 환경 변수 설정
+# --- AWS 환경 변수 설정 (이 부분은 본인 값으로 채워야 합니다) ---
 env:
-  AWS_REGION: ap-southeast-2                  # 1. AWS 리전 (예: ap-northeast-2)
-  ECR_BACKEND_REPOSITORY: chatbot-backend     # 2. 백엔드 ECR 리포지토리 이름
-  ECR_FRONTEND_REPOSITORY: chatbot-frontend   # 3. 프론트엔드 ECR 리포지토리 이름
-  ECS_CLUSTER_NAME: chatbot-ec2-cluster       # 4. ECS 클러스터 이름
-  ECS_SERVICE_NAME: chatbot-service           # 5. ECS 서비스 이름
-  ECS_TASK_DEFINITION: app-task-definition    # 6. ECS 작업 정의 이름
-  CONTAINER_BACKEND_NAME: backend-container   # 7. 작업 정의 내부의 백엔드 컨테이너 이름
-  CONTAINER_FRONTEND_NAME: frontend-container # 8. 작업 정의 내부의 프론트엔드 컨테이너 이름
-  # ------------------------------------------------------------------
+  AWS_REGION: ap-southeast-2
+  ECR_BACKEND_REPOSITORY: chatbot-backend
+  ECR_FRONTEND_REPOSITORY: chatbot-frontend
+  ECS_CLUSTER_NAME: chatbot-ec2-cluster
+  ECS_SERVICE_NAME: chatbot-service
+  ECS_TASK_DEFINITION: app-task-definition
+  CONTAINER_BACKEND_NAME: backend-container
+  CONTAINER_FRONTEND_NAME: frontend-container
 
-# 2. AWS OIDC 인증을 위한 권한 추가
+# --- AWS OIDC 인증을 위한 권한 설정 ---
 permissions:
   id-token: write
   contents: read
@@ -26,35 +25,24 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.12'
-        
-    - name: Cache pip dependencies
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-          
-    - name: Install dependencies
-      run: |
-        cd backend
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        
-    - name: Run tests (if available)
-      run: |
-        cd backend
-        echo "Tests placeholder - add your tests here"
-        
+      # --- 테스트 작업은 기존과 동일합니다 ---
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          cd backend
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run tests (if available)
+        run: |
+          cd backend
+          echo "Tests placeholder"
+
   build-and-push:
     needs: test
     runs-on: ubuntu-latest
@@ -62,116 +50,101 @@ jobs:
     outputs:
       backend_image_uri: ${{ steps.set-output-uris.outputs.backend_uri }}
       frontend_image_uri: ${{ steps.set-output-uris.outputs.frontend_uri }}
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        role-to-assume: ${{ secrets.ROLE_ARN }}
-        aws-region: ap-southeast-2
+      # --- 여기서 'github_ec2_ecs_role'을 사용합니다 ---
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.ROLE_ARN }} # ROLE_ARN Secret에 저장된 'github_ec2_ecs_role'의 ARN
+          aws-region: ${{ env.AWS_REGION }}
 
-    - name: Log in to Amazon ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v2
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
-    - name: Define image URIs
-      id: define-uris
-      run: |
-        echo "BACKEND_URI=${{ steps.login-ecr.outputs.registry }}/chatbot-backend:${{ github.sha }}" >> $GITHUB_ENV
-        echo "FRONTEND_URI=${{ steps.login-ecr.outputs.registry }}/chatbot-frontend:${{ github.sha }}" >> $GITHUB_ENV
+      - name: Define image URIs
+        id: define-uris
+        run: |
+          echo "BACKEND_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_BACKEND_REPOSITORY }}:${{ github.sha }}" >> $GITHUB_ENV
+          echo "FRONTEND_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_FRONTEND_REPOSITORY }}:${{ github.sha }}" >> $GITHUB_ENV
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-      
-    - name: Build and push backend image
-      id: build-backend-image
-      uses: docker/build-push-action@v5
-      with:
-        context: ./backend
-        push: true
-        tags: ${{ env.BACKEND_URI }}
-        cache-from: type=gha,scope=backend
-        cache-to: type=gha,mode=max,scope=backend
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      # --- 빌드 대상을 AWS ECR로 변경 ---
+      - name: Build and push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ env.BACKEND_URI }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
 
-    - name: Build and push frontend image
-      id: build-frontend-image
-      uses: docker/build-push-action@v5
-      with:
-        context: ./frontend
-        push: true
-        tags: ${{ env.FRONTEND_URI }}
-        cache-from: type=gha,scope=frontend
-        cache-to: type=gha,mode=max,scope=frontend
-          
-    - name: Set job outputs
-      id: set-output-uris
-      run: |
-        echo "backend_uri=${{ env.BACKEND_URI }}" >> $GITHUB_OUTPUT
-        echo "frontend_uri=${{ env.FRONTEND_URI }}" >> $GITHUB_OUTPUT
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: ${{ env.FRONTEND_URI }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+            
+      - name: Set job outputs
+        id: set-output-uris
+        run: |
+          echo "backend_uri=${{ env.BACKEND_URI }}" >> $GITHUB_OUTPUT
+          echo "frontend_uri=${{ env.FRONTEND_URI }}" >> $GITHUB_OUTPUT
 
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    
     steps:
-    - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        role-to-assume: ${{ secrets.ROLE_ARN }}
-        aws-region: ap-southeast-2
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
 
-    - name: Create new Task Definition with new images
-      id: task-def
-      run: |
-        # 환경 변수 참조 수정
-        echo "🔍 ECS Task Definition: app-task-definition"
-        TASK_DEF_JSON=$(aws ecs describe-task-definition --task-definition app-task-definition --query taskDefinition)
-        echo "🔍 Current Task Definition JSON: $TASK_DEF_JSON"
+      # --- 임시 코드를 실제 ECS 배포 코드로 교체 ---
+      - name: Deploy to Amazon ECS
+        run: |
+          # 현재 작업 정의 다운로드
+          TASK_DEF_JSON=$(aws ecs describe-task-definition --task-definition $ECS_TASK_DEFINITION --query taskDefinition)
 
-        NEW_TASK_DEF_JSON=$(echo $TASK_DEF_JSON | \
-          jq --arg IMAGE_BACKEND "${{ needs.build-and-push.outputs.backend_image_uri }}" \
-             --arg CONTAINER_BACKEND "backend-container" \
-             '( .containerDefinitions[] | select(.name == $CONTAINER_BACKEND) ).image = $IMAGE_BACKEND' | \
-          jq --arg IMAGE_FRONTEND "${{ needs.build-and-push.outputs.frontend_image_uri }}" \
-             --arg CONTAINER_FRONTEND "frontend-container" \
-             '( .containerDefinitions[] | select(.name == $CONTAINER_FRONTEND) ).image = $IMAGE_FRONTEND')
-        
-        # taskRoleArn 처리: null이거나 잘못된 값인 경우 파라미터 자체를 제외
-        TASK_ROLE_ARN=$(echo $NEW_TASK_DEF_JSON | jq -r '.taskRoleArn // empty')
-        echo "🔍 Task Role ARN: '$TASK_ROLE_ARN'"
-        
-        # taskRoleArn이 유효한 ARN인지 확인 (null, empty, 잘못된 형식 제외)
-        if [[ "$TASK_ROLE_ARN" =~ ^arn:aws:iam::[0-9]+:role/[a-zA-Z0-9+=,.@_-]+$ ]]; then
-          echo "✅ Valid taskRoleArn found, using it"
-          NEW_TASK_DEF_REGISTER=$(aws ecs register-task-definition \
-            --family "$(echo $NEW_TASK_DEF_JSON | jq -r .family)" \
-            --container-definitions "$(echo $NEW_TASK_DEF_JSON | jq .containerDefinitions)" \
-            --task-role-arn "$TASK_ROLE_ARN" \
-            --execution-role-arn "$(echo $NEW_TASK_DEF_JSON | jq -r .executionRoleArn)" \
-            --network-mode "$(echo $NEW_TASK_DEF_JSON | jq -r .networkMode)" \
-            --requires-compatibilities '["EC2"]' \
-            --volumes "$(echo $NEW_TASK_DEF_JSON | jq '.volumes // []')")
-        else
-          echo "⚠️ Invalid or null taskRoleArn, registering without it"
-          NEW_TASK_DEF_REGISTER=$(aws ecs register-task-definition \
-            --family "$(echo $NEW_TASK_DEF_JSON | jq -r .family)" \
-            --container-definitions "$(echo $NEW_TASK_DEF_JSON | jq .containerDefinitions)" \
-            --execution-role-arn "$(echo $NEW_TASK_DEF_JSON | jq -r .executionRoleArn)" \
-            --network-mode "$(echo $NEW_TASK_DEF_JSON | jq -r .networkMode)" \
-            --requires-compatibilities '["EC2"]' \
-            --volumes "$(echo $NEW_TASK_DEF_JSON | jq '.volumes // []')")
-        fi
+          # 새 이미지 주소로 교체
+          NEW_TASK_DEF_JSON=$(echo $TASK_DEF_JSON | \
+            jq --arg IMAGE_BACKEND "${{ needs.build-and-push.outputs.backend_image_uri }}" \
+               --arg CONTAINER_BACKEND "$CONTAINER_BACKEND_NAME" \
+               '( .containerDefinitions[] | select(.name == $CONTAINER_BACKEND) ).image = $IMAGE_BACKEND' | \
+            jq --arg IMAGE_FRONTEND "${{ needs.build-and-push.outputs.frontend_image_uri }}" \
+               --arg CONTAINER_FRONTEND "$CONTAINER_FRONTEND_NAME" \
+               '( .containerDefinitions[] | select(.name == $CONTAINER_FRONTEND) ).image = $IMAGE_FRONTEND')
           
-        NEW_REVISION_ARN=$(echo $NEW_TASK_DEF_REGISTER | jq -r '.taskDefinition.taskDefinitionArn')
-        echo "task_definition_arn=$NEW_REVISION_ARN" >> $GITHUB_OUTPUT
+          # 등록에 필요한 키만 추출하여 'role/null' 오류 방지
+          NEW_TASK_DEF_INPUT=$(echo $NEW_TASK_DEF_JSON | jq '{
+              family: .family,
+              taskRoleArn: .taskRoleArn,
+              executionRoleArn: .executionRoleArn,
+              networkMode: .networkMode,
+              containerDefinitions: .containerDefinitions,
+              volumes: .volumes,
+              placementConstraints: .placementConstraints,
+              requiresCompatibilities: .requiresCompatibilities,
+              cpu: .cpu,
+              memory: .memory
+          }')
 
-    - name: Deploy new Task Definition to ECS Service
-      run: |
-        aws ecs update-service \
-          --cluster chatbot-ec2-cluster \
-          --service chatbot-service \
-          --task-definition ${{ steps.task-def.outputs.task_definition_arn }}
+          # 새 작업 정의 등록
+          NEW_TASK_DEF_REGISTER=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEF_INPUT")
+          NEW_REVISION_ARN=$(echo $NEW_TASK_DEF_REGISTER | jq -r '.taskDefinition.taskDefinitionArn')
+          
+          # 서비스 업데이트
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER_NAME \
+            --service $ECS_SERVICE_NAME \
+            --task-definition $NEW_REVISION_ARN
