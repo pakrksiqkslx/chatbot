@@ -154,28 +154,23 @@ class DirectPineconeVectorizer:
             if "수업계획" in course_info:
                 수업계획 = course_info["수업계획"]
                 
-                # 주차별로 묶어서 처리 (4주씩)
+                # 주차별로 개별 처리 (4주씩 묶지 않음)
                 weeks = sorted([k for k in 수업계획.keys() if k.endswith('주차')])
                 
-                for i in range(0, len(weeks), 4):
-                    week_group = weeks[i:i+4]
+                for week in weeks:
+                    week_info = 수업계획[week]
                     text = f"[강의명] {course_name}\n[담당교수] {professor}\n\n"
-                    text += f"[수업계획 - {week_group[0]} ~ {week_group[-1]}]\n\n"
-                    
-                    for week in week_group:
-                        week_info = 수업계획[week]
-                        text += f"■ {week}\n"
-                        for key, value in week_info.items():
-                            if value and str(value) != 'nan':
-                                text += f"  {key}: {value}\n"
-                        text += "\n"
+                    text += f"[{week}]\n"
+                    for key, value in week_info.items():
+                        if value and str(value) != 'nan':
+                            text += f"{key}: {value}\n"
                     
                     documents.append({
                         "text": text,
                         "metadata": {
                             "course_name": course_name,
                             "professor": professor,
-                            "section": f"수업계획_{week_group[0]}~{week_group[-1]}",
+                            "section": week,
                             "course_code": course_code
                         }
                     })
@@ -318,7 +313,9 @@ def main():
     test_queries = [
         "C언어프로그래밍 교수님 누구야?",
         "정원석 교수님이 가르치는 과목은?",
-        "C언어 수업 목표가 뭐야?"
+        "C언어 수업 목표가 뭐야?",
+        "C언어프로그래밍 1주차 수업 내용이 뭐야?",
+        "C언어프로그래밍 5주차는 뭘 배워?"
     ]
     
     for query in test_queries:
