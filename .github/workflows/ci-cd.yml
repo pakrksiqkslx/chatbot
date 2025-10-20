@@ -121,7 +121,7 @@ jobs:
         # 등록에 필요한 키만 추출하여 'role/null' 및 'cpu/memory' 오류 방지
         NEW_TASK_DEF_INPUT=$(echo $NEW_TASK_DEF_JSON | jq '{
             family: .family,
-            taskRoleArn: .taskRoleArn,
+            taskRoleArn: (if .taskRoleArn == null then empty else .taskRoleArn end),
             executionRoleArn: .executionRoleArn,
             networkMode: .networkMode,
             containerDefinitions: .containerDefinitions,
