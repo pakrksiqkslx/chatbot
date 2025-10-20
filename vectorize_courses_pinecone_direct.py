@@ -1,25 +1,29 @@
 """
-수업계획서 벡터화 및 FAISS 저장 스크립트
-- 강의명과 교수명을 함께 벡터화하여 검색 정확도 향상
+PINECONE API 직접 사용을 위한 벡터화 스크립트
+LangChain 호환성 문제를 우회하여 PINECONE API v5를 직접 사용
 """
 
 import json
 import os
-import pickle
 from pathlib import Path
 from typing import List, Dict, Any
 import numpy as np
 from tqdm import tqdm
 
 # HuggingFace 임베딩 모델 사용 (한국어 특화)
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import FAISS
-from langchain_core.documents import Document
+try:
+    from langchain_huggingface import HuggingFaceEmbeddings
+except ImportError:
+    from langchain_community.embeddings import HuggingFaceEmbeddings
+
+# PINECONE API v5 직접 사용
+from pinecone import Pinecone, ServerlessSpec
+import uuid
+import time
 
 
-class CourseVectorizer:
-    """수업계획서 벡터화 클래스"""
+class DirectPineconeVectorizer:
+    """PINECONE API 직접 사용 벡터화 클래스"""
     
     def __init__(self, json_path: str = "utils/output.json"):
         """
@@ -37,6 +41,25 @@ class CourseVectorizer:
             encode_kwargs={'normalize_embeddings': True}
         )
         print("[임베딩 모델 로딩 완료!]")
+        
+        # PINECONE 초기화
+        self._init_pinecone()
+    
+    def _init_pinecone(self):
+        """PINECONE 초기화"""
+        try:
+            api_key = os.getenv("PINECONE_API_KEY")
+            
+            if not api_key:
+                raise ValueError("PINECONE_API_KEY가 설정되지 않았습니다.")
+            
+            print("[PINECONE 초기화 중...]")
+            self.pc = Pinecone(api_key=api_key)
+            print("[PINECONE 초기화 완료!]")
+            
+        except Exception as e:
+            print(f"[PINECONE 초기화 실패: {e}]")
+            raise
     
     def _load_json(self) -> Dict:
         """JSON 파일 로드"""
@@ -46,8 +69,8 @@ class CourseVectorizer:
         print(f"[{len(data)}개 강의 데이터 로드 완료]")
         return data
     
-    def _create_course_documents(self) -> List[Document]:
-        """각 강의를 Document 객체로 변환 (강의명 + 교수명 포함)"""
+    def _create_course_documents(self) -> List[Dict[str, Any]]:
+        """각 강의를 문서 객체로 변환"""
         documents = []
         
         print("\n[강의 문서 생성 중...]")
@@ -70,15 +93,15 @@ class CourseVectorizer:
                     if value and str(value) != 'nan':
                         text += f"{key}: {value}\n"
                 
-                documents.append(Document(
-                    page_content=text,
-                    metadata={
+                documents.append({
+                    "text": text,
+                    "metadata": {
                         "course_name": course_name,
                         "professor": professor,
                         "section": "교과목 운영",
                         "course_code": course_code
                     }
-                ))
+                })
             
             # 2. 교과목 개요
             if "교과목 개요" in course_info:
@@ -92,15 +115,15 @@ class CourseVectorizer:
                     if value and str(value) != 'nan':
                         text += f"{key}: {value}\n\n"
                 
-                documents.append(Document(
-                    page_content=text,
-                    metadata={
+                documents.append({
+                    "text": text,
+                    "metadata": {
                         "course_name": course_name,
                         "professor": professor,
                         "section": "교과목 개요",
                         "course_code": course_code
                     }
-                ))
+                })
             
             # 3. 교과목 역량
             if "교과목 역량" in course_info:
@@ -117,15 +140,15 @@ class CourseVectorizer:
                     elif value and str(value) != 'nan':
                         text += f"{key}: {value}\n"
                 
-                documents.append(Document(
-                    page_content=text,
-                    metadata={
+                documents.append({
+                    "text": text,
+                    "metadata": {
                         "course_name": course_name,
                         "professor": professor,
                         "section": "교과목 역량",
                         "course_code": course_code
                     }
-                ))
+                })
             
             # 4. 수업계획 (주차별)
             if "수업계획" in course_info:
@@ -147,15 +170,15 @@ class CourseVectorizer:
                                 text += f"  {key}: {value}\n"
                         text += "\n"
                     
-                    documents.append(Document(
-                        page_content=text,
-                        metadata={
+                    documents.append({
+                        "text": text,
+                        "metadata": {
                             "course_name": course_name,
                             "professor": professor,
                             "section": f"수업계획_{week_group[0]}~{week_group[-1]}",
                             "course_code": course_code
                         }
-                    ))
+                    })
             
             # 5. 과제 정보
             if "과제" in course_info:
@@ -172,57 +195,91 @@ class CourseVectorizer:
                     elif value and str(value) != 'nan':
                         text += f"{key}: {value}\n"
                 
-                documents.append(Document(
-                    page_content=text,
-                    metadata={
+                documents.append({
+                    "text": text,
+                    "metadata": {
                         "course_name": course_name,
                         "professor": professor,
                         "section": "과제",
                         "course_code": course_code
                     }
-                ))
+                })
         
         print(f"[총 {len(documents)}개 문서 생성 완료]")
         return documents
     
-    def create_and_save_vectorstore(self, output_dir: str = "vectorstore"):
-        """벡터 스토어 생성 및 저장"""
+    def create_and_save_vectorstore(self, index_name: str = "chatbot-courses"):
+        """PINECONE에 벡터 저장"""
         # 문서 생성
         documents = self._create_course_documents()
         
-        # FAISS 벡터 스토어 생성
-        print("\n[FAISS 벡터 스토어 생성 중...]")
-        vectorstore = FAISS.from_documents(
-            documents=documents,
-            embedding=self.embeddings
-        )
+        print(f"\n[PINECONE 벡터 스토어 생성 중: {index_name}]")
         
-        # 저장 디렉토리 생성
-        output_path = Path(output_dir)
-        output_path.mkdir(exist_ok=True)
+        # 인덱스가 존재하지 않으면 생성
+        if index_name not in self.pc.list_indexes().names():
+            print(f"[PINECONE 인덱스 생성 중: {index_name}]")
+            self.pc.create_index(
+                name=index_name,
+                dimension=768,  # ko-sroberta-multitask 임베딩 차원
+                metric="cosine",
+                spec=ServerlessSpec(
+                    cloud="aws",
+                    region="us-east-1"
+                )
+            )
+            print(f"[PINECONE 인덱스 생성 완료: {index_name}]")
         
-        # FAISS 인덱스 저장
-        vectorstore_path = output_path / "faiss_index"
-        vectorstore.save_local(str(vectorstore_path))
-        print(f"[FAISS 벡터 스토어 저장 완료: {vectorstore_path}]")
+        # 인덱스 연결
+        index = self.pc.Index(index_name)
+        
+        # 벡터 업로드를 위한 배치 처리
+        batch_size = 100
+        vectors = []
+        
+        print(f"[벡터 생성 및 업로드 중...]")
+        
+        for i, doc in enumerate(tqdm(documents, desc="벡터 생성")):
+            # 텍스트를 벡터로 변환
+            embedding = self.embeddings.embed_query(doc["text"])
+            
+            # 벡터 추가
+            vector_id = f"doc_{i}_{uuid.uuid4().hex[:8]}"
+            vectors.append({
+                "id": vector_id,
+                "values": embedding,
+                "metadata": doc["metadata"]
+            })
+            
+            # 배치 크기에 도달하면 업로드
+            if len(vectors) >= batch_size:
+                index.upsert(vectors=vectors)
+                vectors = []
+                time.sleep(0.1)  # API 제한 방지
+        
+        # 남은 벡터 업로드
+        if vectors:
+            index.upsert(vectors=vectors)
+        
+        print(f"[PINECONE 벡터 스토어 저장 완료: {index_name}]")
         
         # 메타데이터 통계 저장
         metadata_stats = self._get_metadata_stats(documents)
-        stats_path = output_path / "metadata_stats.json"
+        stats_path = Path("vectorstore") / "metadata_stats.json"
+        stats_path.parent.mkdir(exist_ok=True)
         with open(stats_path, 'w', encoding='utf-8') as f:
             json.dump(metadata_stats, indent=2, ensure_ascii=False, fp=f)
         print(f"[메타데이터 통계 저장 완료: {stats_path}]")
         
-        return vectorstore
+        return index
     
-    def _get_metadata_stats(self, documents: List[Document]) -> Dict:
+    def _get_metadata_stats(self, documents: List[Dict[str, Any]]) -> Dict:
         """메타데이터 통계 정보"""
         professors = set()
         courses = set()
         sections = {}
         
         for doc in documents:
-            meta = doc.metadata
+            meta = doc["metadata"]
             if meta.get('professor'):
                 professors.add(meta['professor'])
             if meta.get('course_name'):
@@ -243,17 +300,17 @@ class CourseVectorizer:
 def main():
     """메인 실행 함수"""
     print("=" * 60)
-    print("[수업계획서 벡터화 시작]")
+    print("[수업계획서 벡터화 시작 - PINECONE 직접 사용]")
     print("=" * 60)
     
     # 벡터라이저 생성
-    vectorizer = CourseVectorizer(json_path="utils/output.json")
+    vectorizer = DirectPineconeVectorizer(json_path="utils/output.json")
     
     # 벡터 스토어 생성 및 저장
-    vectorstore = vectorizer.create_and_save_vectorstore(output_dir="vectorstore")
+    index = vectorizer.create_and_save_vectorstore(index_name="chatbot-courses")
     
     print("\n" + "=" * 60)
-    print("[벡터화 완료!]")
+    print("[PINECONE 벡터화 완료!]")
     print("=" * 60)
     
     # 테스트 검색
@@ -266,13 +323,22 @@ def main():
     
     for query in test_queries:
         print(f"\n질문: {query}")
-        results = vectorstore.similarity_search(query, k=2)
-        for i, doc in enumerate(results, 1):
-            print(f"  [{i}] {doc.metadata['course_name']} - {doc.metadata['professor']}")
-            print(f"      섹션: {doc.metadata['section']}")
-            print(f"      내용 미리보기: {doc.page_content[:100]}...")
+        # 쿼리를 벡터로 변환
+        query_embedding = vectorizer.embeddings.embed_query(query)
+        
+        # PINECONE에서 검색
+        results = index.query(
+            vector=query_embedding,
+            top_k=2,
+            include_metadata=True
+        )
+        
+        for i, match in enumerate(results.matches, 1):
+            metadata = match.metadata
+            print(f"  [{i}] {metadata['course_name']} - {metadata['professor']}")
+            print(f"      섹션: {metadata['section']}")
+            print(f"      점수: {match.score:.3f}")
 
 
 if __name__ == "__main__":
     main()
-

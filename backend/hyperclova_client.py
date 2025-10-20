@@ -181,7 +181,7 @@ class HyperCLOVAClient:
 
         # 컨텍스트 구성
         context_text = "\n\n".join([
-            f"[관련 정보 {i+1}]\n{doc['content']}"
+            f"[관련 정보 {i+1}]\n{doc.get('content', doc.get('page_content', ''))}"
             for i, doc in enumerate(context_docs)
         ])
         

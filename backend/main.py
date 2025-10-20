@@ -5,7 +5,7 @@ from pydantic import BaseModel
 import uvicorn
 import logging
 from config import settings
-from vectorstore_service import get_vectorstore_service
+from direct_pinecone_service import get_vectorstore_service
 from hyperclova_client import get_hyperclova_client
 
 # 로깅 설정
@@ -96,9 +96,9 @@ async def chat(request: ChatRequest):
     try:
         logger.info(f"채팅 요청: {request.query}")
         
-        # 1. FAISS 벡터 검색
+        # 1. PINECONE 벡터 검색
         vectorstore = get_vectorstore_service()
-        search_results = vectorstore.search_with_scores(
+        search_results = vectorstore.similarity_search(
             query=request.query,
             k=request.k
         )
@@ -126,8 +126,7 @@ async def chat(request: ChatRequest):
                     "course_name": result["metadata"].get("course_name", ""),
                     "professor": result["metadata"].get("professor", ""),
                     "section": result["metadata"].get("section", ""),
-                    "score": result.get("score", 0.0),
-                    "content_preview": result["content"][:200] + "..."
+                    "content_preview": result["page_content"][:200] + "..."
                 })
         
         logger.info("답변 생성 완료")

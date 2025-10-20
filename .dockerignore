@@ -56,3 +56,4 @@ temp/
 Dockerfile
 docker-compose*.yml
 
+vectorize_courses.py
