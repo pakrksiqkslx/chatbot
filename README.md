@@ -99,6 +99,33 @@ docker-compose up --build
 - **`.env` 파일 생성 불필요** - API 키가 `docker-compose.yml`에 이미 설정되어 있음
 - **벡터화 과정 불필요** - PINECONE DB에 이미 데이터가 저장되어 있음
 
+### 💻 로컬 개발 환경 설정
+
+로컬에서 개발하려면 `.env` 파일이 필요합니다. 자동 생성 스크립트를 실행하세요:
+
+```bash
+# 1. 저장소 클론
+git clone https://github.com/ley38107/chatbot.git
+cd chatbot
+
+# 2. .env 파일 자동 생성
+setup-local-env.bat      # Windows CMD
+# 또는
+setup-local-env.ps1      # PowerShell
+
+# 3. 백엔드 실행
+cd backend
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn main:app --host 0.0.0.0 --port 5000 --reload
+
+# 4. 프론트엔드 실행 (새 터미널)
+cd frontend
+npm install
+npm start
+```
+
 ### 🔧 수동 설정 방법
 
 1.  **프로젝트 클론**
@@ -107,20 +134,7 @@ docker-compose up --build
     cd chatbot
     ```
 
-2.  **Frontend 설정**
-    ```sh
-    cd frontend
-    npm install
-    npm start
-    ```
-
-3.  **Backend 설정**
-    ```sh
-    cd backend
-    pip install -r requirements.txt
-    ```
-
-4.  **환경변수 설정 (선택사항)**
+2.  **환경변수 설정**
     
     **Docker 사용 시**: 환경변수 설정이 **불필요**합니다. `docker-compose.yml`에 이미 설정되어 있습니다.
     
@@ -129,6 +143,20 @@ docker-compose up --build
     PINECONE_API_KEY=your-pinecone-api-key-here
     HYPERCLOVA_API_KEY=your-hyperclova-api-key-here
     USE_PINECONE=true
+    ```
+
+3.  **Frontend 설정**
+    ```sh
+    cd frontend
+    npm install
+    npm start
+    ```
+
+4.  **Backend 설정**
+    ```sh
+    cd backend
+    pip install -r requirements.txt
+    uvicorn main:app --host 0.0.0.0 --port 5000 --reload
     ```
     
     **FAISS 사용 (폴백):**
