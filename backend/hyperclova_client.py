@@ -163,6 +163,68 @@ class HyperCLOVAClient:
                 logger.error(f"응답 내용: {e.response.text}")
             raise
     
+    def classify_intent(self, query: str) -> str:
+        """
+        사용자 질문의 의도 분류 (단순화)
+        
+        Args:
+            query: 사용자 질문
+            
+        Returns:
+            'course_related' 또는 'casual_chat'
+        """
+        system_prompt = """당신은 사용자 질문을 분류하는 AI입니다.
+사용자의 질문을 다음 2가지로만 분류해주세요:
+
+1. course_related: 수업계획서와 관련된 모든 질문
+   예시: "임석구 교수님", "임석구 교수님 연락처", "C언어프로그래밍 교수님", 
+         "데이터베이스 과제", "웹프로그래밍 수업시간", "캡스톤디자인 수업계획"
+
+2. casual_chat: 일상 대화
+   예시: "안녕", "고마워", "날씨", "시간", "뭐해?"
+
+답변은 반드시 다음 중 하나만 출력하세요:
+- course_related (수업계획서 관련)
+- casual_chat (일상 대화)"""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"다음 질문을 분류하세요: {query}"}
+        ]
+        
+        try:
+            response = self.chat(messages=messages, max_tokens=10, temperature=0.1)
+            
+            # 응답 추출
+            if "result" in response and "message" in response["result"]:
+                message = response["result"]["message"]
+                content = message.get("content", [])
+                
+                if isinstance(content, str):
+                    result = content.strip().lower()
+                elif isinstance(content, list) and len(content) > 0:
+                    first_item = content[0]
+                    if isinstance(first_item, dict):
+                        result = first_item.get("text", "").strip().lower()
+                    else:
+                        result = str(first_item).strip().lower()
+                else:
+                    result = ""
+                
+                # 응답에 'course' 또는 'related'가 포함되어 있으면 수업 관련
+                if 'course' in result or 'related' in result or '수업' in result:
+                    return 'course_related'
+                else:
+                    return 'casual_chat'
+            
+            # 기본값: 수업 관련으로 처리 (안전)
+            return 'course_related'
+            
+        except Exception as e:
+            logger.error(f"의도 분류 실패: {e}")
+            # 오류 시 안전하게 수업 관련으로 처리
+            return 'course_related'
+    
     def generate_answer(
         self,
         query: str,
@@ -186,16 +248,24 @@ class HyperCLOVAClient:
             logger.info("Mock 응답 생성 중 (API 키 문제로 임시 사용)")
             return self._generate_mock_answer(query, context_docs)
         
-        # 기본 시스템 프롬프트
+        # 기본 시스템 프롬프트 (개선된 버전)
         if system_prompt is None:
-            system_prompt = """당신은 수업계획서 기반 학습 지원 챗봇입니다.
-주어진 수업계획서 정보를 바탕으로 학생들의 질문에 정확하고 친절하게 답변해주세요.
+            system_prompt = """당신은 대학교 수업계획서 기반 챗봇입니다.
+제공된 수업계획서 정보를 바탕으로 학생들의 질문에 정확하고 도움이 되는 답변을 제공하세요.
 
-답변 시 다음을 지켜주세요:
-1. 주어진 컨텍스트 정보를 기반으로만 답변하세요.
-2. 확실하지 않은 정보는 추측하지 말고, "제공된 수업계획서에는 해당 정보가 없습니다"라고 답변하세요.
-3. 강의명과 교수명을 명확히 언급하세요.
-4. 한국어로 자연스럽고 친절하게 답변하세요."""
+답변 원칙:
+1. 제공된 수업계획서 정보만을 바탕으로 답변
+2. 질문의 의도를 정확히 파악하여 적절한 형태로 답변
+3. 교수님 이름만 물어보면 해당 교수님의 모든 수업 목록을 보여주기
+4. 연락처를 물어보면 교수님의 연락처 정보를 제공하기
+5. 구체적인 수업을 물어보면 해당 수업의 상세 정보를 제공하기
+6. 친근하고 도움이 되는 톤으로 답변
+7. 정보가 부족하면 솔직하게 말하기
+
+답변 형태 예시:
+- 교수님 이름만 물어본 경우: "○○ 교수님의 수업은 다음과 같습니다: 1. 강의A 2. 강의B ..."
+- 연락처를 물어본 경우: "○○ 교수님의 연락처는 010-xxxx-xxxx입니다."
+- 구체적 수업을 물어본 경우: 해당 수업의 상세 정보 제공"""
 
         # 컨텍스트 구성
         context_text = "\n\n".join([
@@ -256,6 +326,59 @@ class HyperCLOVAClient:
             logger.error(f"응답 파싱 오류: {e}")
             logger.error(f"전체 응답: {json.dumps(response, ensure_ascii=False, indent=2)}")
             raise
+    
+    def generate_casual_answer(self, query: str) -> str:
+        """
+        일상 대화 답변 생성 (컨텍스트 없이)
+        
+        Args:
+            query: 사용자 질문
+            
+        Returns:
+            생성된 답변 텍스트
+        """
+        system_prompt = """당신은 친근하고 도움이 되는 대학교 수업 안내 챗봇입니다.
+학생들과 자연스럽게 대화하며, 필요한 경우 수업계획서 관련 질문을 하도록 안내해주세요.
+
+답변 원칙:
+1. 친근하고 자연스러운 한국어로 답변
+2. 간단명료하게 답변
+3. 수업 관련 질문이 있다면 구체적으로 물어보도록 유도"""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": query}
+        ]
+        
+        try:
+            response = self.chat(
+                messages=messages,
+                max_tokens=200,
+                temperature=0.7,
+                top_p=0.9
+            )
+            
+            # 응답 추출
+            if "result" in response and "message" in response["result"]:
+                message = response["result"]["message"]
+                content = message.get("content", [])
+                
+                if isinstance(content, str):
+                    return content
+                elif isinstance(content, list) and len(content) > 0:
+                    first_item = content[0]
+                    if isinstance(first_item, dict):
+                        return first_item.get("text", "")
+                    elif isinstance(first_item, str):
+                        return first_item
+                
+                return str(content) if content else "안녕하세요! 무엇을 도와드릴까요?"
+            
+            return "안녕하세요! 무엇을 도와드릴까요?"
+            
+        except Exception as e:
+            logger.error(f"일상 대화 답변 생성 실패: {e}")
+            return "죄송합니다. 답변을 생성하는 중 오류가 발생했습니다."
     
     def _generate_mock_answer(self, query: str, context_docs: List[Dict[str, Any]]) -> str:
         """

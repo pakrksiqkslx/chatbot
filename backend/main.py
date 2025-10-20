@@ -90,13 +90,33 @@ async def chat(request: ChatRequest):
     """
     수업계획서 기반 챗봇 엔드포인트
     
-    1. PINECONE에서 유사 문서 검색
-    2. HyperCLOVA X로 답변 생성
+    1. 질문 의도 분류 (수업 관련 vs 일상 대화)
+    2. 수업 관련: PINECONE 검색 + HyperCLOVA 직접 답변
+    3. 일상 대화: HyperCLOVA 직접 답변
     """
     try:
         logger.info(f"채팅 요청: {request.query}")
         
-        # 1. PINECONE 벡터 검색
+        # HyperCLOVA 클라이언트 초기화
+        hyperclova = get_hyperclova_client()
+        
+        # 1. 질문 의도 분류
+        intent = hyperclova.classify_intent(request.query)
+        logger.info(f"질문 의도: {intent}")
+        
+        # 2. 일상 대화인 경우 바로 답변
+        if intent == 'casual_chat':
+            logger.info("일상 대화로 분류 - 직접 답변 생성")
+            answer = hyperclova.generate_casual_answer(request.query)
+            
+            return ChatResponse(
+                answer=answer,
+                sources=[]
+            )
+        
+        # 3. PINECONE 벡터 검색 (교수님 목록 요청 또는 수업 관련 질문)
+        logger.info(f"{intent} 분류 - 벡터 검색 수행")
+        
         vectorstore = get_vectorstore_service()
         search_results = vectorstore.similarity_search(
             query=request.query,
@@ -105,20 +125,19 @@ async def chat(request: ChatRequest):
         
         if not search_results:
             return ChatResponse(
-                answer="죄송합니다. 관련 정보를 찾을 수 없습니다.",
+                answer="죄송합니다. 관련 수업 정보를 찾을 수 없습니다. 다른 방식으로 질문해주시겠어요?",
                 sources=[]
             )
         
         logger.info(f"검색된 문서 수: {len(search_results)}")
         
-        # 2. HyperCLOVA X로 답변 생성
-        hyperclova = get_hyperclova_client()
+        # 4. HyperCLOVA가 직접 질문을 이해하고 답변 생성
         answer = hyperclova.generate_answer(
             query=request.query,
             context_docs=search_results
         )
         
-        # 3. 응답 구성
+        # 응답 구성
         sources = []
         if request.include_sources:
             for result in search_results:

@@ -101,6 +101,22 @@ docker-compose up --build
 
 ### 💻 로컬 개발 환경 설정
 
+#### ⚡ 한번에 실행 (권장)
+
+```bash
+# 1. 저장소 클론
+git clone https://github.com/ley38107/chatbot.git
+cd chatbot
+
+# 2. 로컬 개발 환경 시작 (백엔드 + 프론트엔드)
+start-local-dev.bat
+
+# 3. 개발 서버 종료
+stop-local-dev.bat
+```
+
+#### 📝 수동 실행
+
 로컬에서 개발하려면 `.env` 파일이 필요합니다. 자동 생성 스크립트를 실행하세요:
 
 ```bash
@@ -110,8 +126,6 @@ cd chatbot
 
 # 2. .env 파일 자동 생성
 setup-local-env.bat      # Windows CMD
-# 또는
-setup-local-env.ps1      # PowerShell
 
 # 3. 백엔드 실행
 cd backend
