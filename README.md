@@ -136,14 +136,29 @@ npm start
 
 2.  **환경변수 설정**
     
-    **Docker 사용 시**: 환경변수 설정이 **불필요**합니다. `docker-compose.yml`에 이미 설정되어 있습니다.
-    
-    **로컬 개발 시**: 프로젝트 루트에 `.env` 파일을 생성하고 아래 내용을 채워주세요.
+    **Docker 사용 시**: 프로젝트 루트에 `.env` 파일을 생성하고 아래 내용을 채워주세요.
     ```env
-    PINECONE_API_KEY=your-pinecone-api-key-here
+    # HyperCLOVA X API 키 (필수)
     HYPERCLOVA_API_KEY=your-hyperclova-api-key-here
+    
+    # PINECONE API 키 (필수)
+    PINECONE_API_KEY=your-pinecone-api-key-here
+    
+    # PINECONE 환경 설정 (선택사항)
+    PINECONE_ENVIRONMENT=us-east-1
+    
+    # PINECONE 인덱스 이름 (선택사항)
+    PINECONE_INDEX_NAME=chatbot-courses
+    
+    # 벡터 스토어 사용 여부 (선택사항)
     USE_PINECONE=true
     ```
+    
+    **API 키 발급 방법:**
+    - **HyperCLOVA X**: https://clovastudio.ncloud.com/ → 새 앱 생성
+    - **PINECONE**: https://www.pinecone.io/ → API Keys
+    
+    **로컬 개발 시**: 위와 동일한 `.env` 파일을 생성하세요.
 
 3.  **Frontend 설정**
     ```sh

@@ -25,11 +25,11 @@ echo.
 
 REM .env 파일 생성
 (
-echo # HyperCLOVA X API 설정
-echo HYPERCLOVA_API_KEY=nv-93ec8a8d596946b2b2314d70dcdba676qLCw
+echo # HyperCLOVA X API 설정 - 실제 API 키로 교체하세요
+echo HYPERCLOVA_API_KEY=your-hyperclova-api-key-here
 echo.
-echo # PINECONE 설정
-echo PINECONE_API_KEY=pcsk_2gNHZ_ChuVt8WRLZwrFuvV8jH1LLAaqNJgSGTreVyFmN5B6p2GVxznjLaySDQKD38nXcv
+echo # PINECONE 설정 - 실제 API 키로 교체하세요
+echo PINECONE_API_KEY=your-pinecone-api-key-here
 echo PINECONE_ENVIRONMENT=us-east-1
 echo PINECONE_INDEX_NAME=chatbot-courses
 echo.
@@ -47,6 +47,12 @@ echo LOG_LEVEL=INFO
 echo ================================================
 echo [완료] .env 파일이 생성되었습니다!
 echo ================================================
+echo.
+echo ⚠️  중요: .env 파일의 API 키를 실제 키로 교체하세요!
+echo.
+echo API 키 발급 방법:
+echo   - HyperCLOVA X: https://clovastudio.ncloud.com/
+echo   - PINECONE: https://www.pinecone.io/
 echo.
 echo 이제 로컬에서 개발할 수 있습니다:
 echo.
