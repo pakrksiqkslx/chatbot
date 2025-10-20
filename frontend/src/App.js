@@ -10,12 +10,16 @@ import Footer from './components/Footer/Footer';
 import StudyPlan from './components/StudyPlan/StudyPlan';
 
 
-let idCounter = 1;
+// 고유한 메시지 ID 생성 함수
+function generateMessageId() {
+  return `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
 function makeDefaultSession() {
   return {
     id: Date.now(),
     messages: [
-      { id: idCounter++, from: 'bot', text: '안녕하세요! 무엇을 도와드릴까요?', ts: Date.now() },
+      { id: generateMessageId(), from: 'bot', text: '안녕하세요! 무엇을 도와드릴까요?', ts: Date.now() },
     ],
     created: Date.now(),
   };
@@ -37,13 +41,40 @@ function App() {
     currentSessionIdxRef.current = currentSessionIdx;
   }, [currentSessionIdx]);
 
+  async function callChatAPI(userMessage) {
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const response = await fetch(`${apiUrl}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: userMessage,
+          k: 3,
+          include_sources: true
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`API 호출 실패: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.answer || '답변을 생성할 수 없습니다.';
+    } catch (error) {
+      console.error('백엔드 API 호출 오류:', error);
+      return `죄송합니다. 서버와 통신 중 오류가 발생했습니다: ${error.message}`;
+    }
+  }
+
   function handleSend(text) {
     if (pendingSession) {
       const newSession = {
         ...pendingSession,
         messages: [
           ...pendingSession.messages,
-          { id: idCounter++, from: 'user', text, ts: Date.now() }
+          { id: generateMessageId(), from: 'user', text, ts: Date.now() }
         ]
       };
       setSessions(prev => {
@@ -51,37 +82,55 @@ function App() {
         const updated = [...prev, newSession];
         setCurrentSessionIdx(newSessionIdx);
         setPendingSession(null);
-        setTimeout(() => {
+        
+        // 백엔드 API 호출
+        callChatAPI(text).then(botResponse => {
           setSessions(prev2 => {
             const updated2 = [...prev2];
-            const botMsg = { id: idCounter++, from: 'bot', text: `질문: "${text}" 에 대해 답변을 준비 중입니다. (예시 응답)`, ts: Date.now() };
+            const botMsg = { id: generateMessageId(), from: 'bot', text: botResponse, ts: Date.now() };
             updated2[newSessionIdx].messages = [...updated2[newSessionIdx].messages, botMsg];
             return updated2;
           });
-        }, 100);
+        });
+        
         return updated;
       });
       return;
     }
+    
     const idx = currentSessionIdxRef.current;
+    const loadingMsgId = generateMessageId();
+    
     setSessions(prev => {
       const updated = prev.map((session, i) =>
         i === idx
-          ? { ...session, messages: [...session.messages, { id: idCounter++, from: 'user', text, ts: Date.now() }] }
+          ? { 
+              ...session, 
+              messages: [
+                ...session.messages, 
+                { id: generateMessageId(), from: 'user', text, ts: Date.now() },
+                { id: loadingMsgId, from: 'bot', text: '답변을 생성하는 중...', ts: Date.now(), isLoading: true }
+              ] 
+            }
           : session
       );
       return updated;
     });
-    setTimeout(() => {
+    
+    // 백엔드 API 호출
+    callChatAPI(text).then(botResponse => {
       setSessions(prev2 => {
-        const updated2 = prev2.map((session, i) =>
-          i === idx
-            ? { ...session, messages: [...session.messages, { id: idCounter++, from: 'bot', text: `질문: "${text}" 에 대해 답변을 준비 중입니다. (예시 응답)`, ts: Date.now() }] }
-            : session
-        );
+        const updated2 = prev2.map((session, i) => {
+          if (i === idx) {
+            // 로딩 메시지 제거하고 실제 응답 추가
+            const filtered = session.messages.filter(m => m.id !== loadingMsgId);
+            return { ...session, messages: [...filtered, { id: generateMessageId(), from: 'bot', text: botResponse, ts: Date.now() }] };
+          }
+          return session;
+        });
         return updated2;
       });
-    }, 100);
+    });
   }
 
   function handleSelectSession(idx) {
