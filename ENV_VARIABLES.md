@@ -87,6 +87,11 @@ CORS_ORIGINS=http://localhost:3000,https://yourdomain.com
 
 ### **외부 API 설정:**
 ```bash
+# HyperCLOVA X API
+HYPERCLOVA_API_KEY=your-hyperclova-api-key-here
+HYPERCLOVA_API_GATEWAY_KEY=
+HYPERCLOVA_REQUEST_ID=
+
 # OpenAI API
 OPENAI_API_KEY=sk-your-openai-api-key
 OPENAI_MODEL=gpt-3.5-turbo
