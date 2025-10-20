@@ -1,12 +1,25 @@
-pymilvus==2.4.0
-tqdm==4.66.2
-langchain==0.1.14
-langchain-community==0.0.31
-langchain-core==0.1.40
-langchain-text-splitters==0.0.1
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-requests==2.31.0
-python-dotenv==1.0.0
-pydantic==2.5.0
-pydantic-settings==2.1.0
+# FastAPI 및 웹 서버
+fastapi>=0.104.1
+uvicorn[standard]>=0.24.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# LangChain 및 벡터 검색
+langchain>=0.3.0
+langchain-community>=0.3.0
+langchain-core>=0.3.0
+langchain-text-splitters>=1.0.0
+faiss-cpu>=1.9.0
+pinecone>=5.0.0
+
+# 임베딩 모델
+sentence-transformers>=2.2.2
+
+# HTTP 클라이언트
+requests>=2.31.0
+
+# 환경 변수 관리
+python-dotenv>=1.0.0
+
+# 유틸리티
+tqdm>=4.66.2
