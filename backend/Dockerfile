@@ -32,6 +32,15 @@ WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
+# HuggingFace 캐시 디렉토리 설정 (appuser가 쓸 수 있도록)
+ENV HF_HOME=/app/.cache/huggingface
+ENV TRANSFORMERS_CACHE=/app/.cache/huggingface
+ENV SENTENCE_TRANSFORMERS_HOME=/app/.cache/sentence-transformers
+
+# 캐시 디렉토리 생성 및 권한 설정
+RUN mkdir -p /app/.cache/huggingface /app/.cache/sentence-transformers && \
+    chown -R appuser:appuser /app/.cache
+
 # 애플리케이션 코드 복사
 COPY --chown=appuser:appuser . .
 
