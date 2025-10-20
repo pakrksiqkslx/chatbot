@@ -9,6 +9,10 @@ from pathlib import Path
 from typing import List, Dict, Any
 import numpy as np
 from tqdm import tqdm
+from dotenv import load_dotenv
+
+# .env 파일 로드
+load_dotenv()
 
 # HuggingFace 임베딩 모델 사용 (한국어 특화)
 try:
@@ -103,7 +107,7 @@ class DirectPineconeVectorizer:
                     }
                 })
             
-            # 2. 교과목 개요
+            # 2. 교과목 개요 (청크 분할 적용)
             if "교과목 개요" in course_info:
                 개요정보 = course_info["교과목 개요"]
                 text = f"[강의명] {course_name}\n[담당교수] {professor}\n\n"
@@ -115,15 +119,21 @@ class DirectPineconeVectorizer:
                     if value and str(value) != 'nan':
                         text += f"{key}: {value}\n\n"
                 
-                documents.append({
-                    "text": text,
-                    "metadata": {
-                        "course_name": course_name,
-                        "professor": professor,
-                        "section": "교과목 개요",
-                        "course_code": course_code
-                    }
-                })
+                # 청크 분할 적용
+                chunks = self.chunk_text(text)
+                for chunk_idx, chunk_text in enumerate(chunks):
+                    documents.append({
+                        "text": chunk_text,
+                        "metadata": {
+                            "course_name": course_name,
+                            "professor": professor,
+                            "section": "교과목 개요",
+                            "course_code": course_code,
+                            "chunk_id": f"outline_{chunk_idx}",
+                            "chunk_index": chunk_idx,
+                            "total_chunks": len(chunks)
+                        }
+                    })
             
             # 3. 교과목 역량
             if "교과목 역량" in course_info:
@@ -165,15 +175,21 @@ class DirectPineconeVectorizer:
                         if value and str(value) != 'nan':
                             text += f"{key}: {value}\n"
                     
-                    documents.append({
-                        "text": text,
-                        "metadata": {
-                            "course_name": course_name,
-                            "professor": professor,
-                            "section": week,
-                            "course_code": course_code
-                        }
-                    })
+                    # 청크 분할 적용 (주차별 내용이 길 경우)
+                    chunks = self.chunk_text(text)
+                    for chunk_idx, chunk_text in enumerate(chunks):
+                        documents.append({
+                            "text": chunk_text,
+                            "metadata": {
+                                "course_name": course_name,
+                                "professor": professor,
+                                "section": week,
+                                "course_code": course_code,
+                                "chunk_id": f"{week}_{chunk_idx}",
+                                "chunk_index": chunk_idx,
+                                "total_chunks": len(chunks)
+                            }
+                        })
             
             # 5. 과제 정보
             if "과제" in course_info:
@@ -227,11 +243,24 @@ class DirectPineconeVectorizer:
         # 인덱스 연결
         index = self.pc.Index(index_name)
         
-        # 벡터 업로드를 위한 배치 처리
-        batch_size = 100
+        # 벡터 업로드를 위한 배치 처리 (최적화)
+        batch_size = 200  # 배치 크기 증가
         vectors = []
         
         print(f"[벡터 생성 및 업로드 중...]")
+        
+        def upsert_with_retry(index, vectors, max_retries=3):
+            """지수 백오프로 재시도"""
+            for attempt in range(max_retries):
+                try:
+                    index.upsert(vectors=vectors)
+                    return
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        raise
+                    wait_time = (2 ** attempt) * 0.5
+                    print(f"[재시도 {attempt + 1}/{max_retries}] {wait_time:.1f}초 대기...")
+                    time.sleep(wait_time)
         
         for i, doc in enumerate(tqdm(documents, desc="벡터 생성")):
             # 텍스트를 벡터로 변환
@@ -242,18 +271,21 @@ class DirectPineconeVectorizer:
             vectors.append({
                 "id": vector_id,
                 "values": embedding,
-                "metadata": doc["metadata"]
+                "metadata": {
+                    **doc["metadata"],
+                    "text": doc["text"][:1000]  # Pinecone 40KB 제한 고려
+                }
             })
             
             # 배치 크기에 도달하면 업로드
             if len(vectors) >= batch_size:
-                index.upsert(vectors=vectors)
+                upsert_with_retry(index, vectors)
                 vectors = []
-                time.sleep(0.1)  # API 제한 방지
+                time.sleep(0.05)  # API 제한 방지 (시간 단축)
         
         # 남은 벡터 업로드
         if vectors:
-            index.upsert(vectors=vectors)
+            upsert_with_retry(index, vectors)
         
         print(f"[PINECONE 벡터 스토어 저장 완료: {index_name}]")
         
@@ -266,6 +298,23 @@ class DirectPineconeVectorizer:
         print(f"[메타데이터 통계 저장 완료: {stats_path}]")
         
         return index
+    
+    def chunk_text(self, text: str, chunk_size: int = 400, overlap: int = 50) -> List[str]:
+        """텍스트를 청크로 분할"""
+        if len(text) <= chunk_size:
+            return [text]
+        
+        chunks = []
+        start = 0
+        while start < len(text):
+            end = start + chunk_size
+            chunk = text[start:end]
+            if chunk.strip():
+                chunks.append(chunk.strip())
+            start = end - overlap
+            if start >= len(text):
+                break
+        return chunks
     
     def _get_metadata_stats(self, documents: List[Dict[str, Any]]) -> Dict:
         """메타데이터 통계 정보"""

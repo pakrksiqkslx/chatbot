@@ -5,6 +5,8 @@ import requests
 import json
 import logging
 from typing import List, Dict, Any, Optional
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -36,6 +38,22 @@ class HyperCLOVAClient:
         
         if not self.api_key:
             raise ValueError("HyperCLOVA API 키가 설정되지 않았습니다")
+        
+        # 재시도 로직이 있는 세션 생성
+        self.session = self._get_session_with_retry()
+    
+    def _get_session_with_retry(self):
+        """재시도 로직이 있는 세션"""
+        session = requests.Session()
+        retry = Retry(
+            total=3,
+            backoff_factor=0.5,
+            status_forcelist=[408, 429, 500, 502, 503, 504]
+        )
+        adapter = HTTPAdapter(max_retries=retry)
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+        return session
     
     def _build_headers(self) -> Dict[str, str]:
         """API 요청 헤더 생성 (HyperCLOVA X v3 표준 형식)"""
@@ -125,7 +143,7 @@ class HyperCLOVAClient:
             logger.debug(f"URL: {url}")
             logger.debug(f"요청 헤더: {headers}")
             
-            response = requests.post(
+            response = self.session.post(
                 url,
                 headers=headers,
                 json=payload,

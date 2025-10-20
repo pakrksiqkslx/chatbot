@@ -57,19 +57,9 @@ class Settings:
     HYPERCLOVA_API_GATEWAY_KEY: Optional[str] = os.getenv("HYPERCLOVA_API_GATEWAY_KEY")
     HYPERCLOVA_REQUEST_ID: Optional[str] = os.getenv("HYPERCLOVA_REQUEST_ID")
     
-    # 벡터 스토어 설정 (PINECONE 우선, FAISS 폴백)
+    # PINECONE 벡터 스토어 설정
     PINECONE_API_KEY: str = os.getenv("PINECONE_API_KEY", "")
-    PINECONE_ENVIRONMENT: str = os.getenv("PINECONE_ENVIRONMENT", "")
     PINECONE_INDEX_NAME: str = os.getenv("PINECONE_INDEX_NAME", "chatbot-courses")
-    
-    # FAISS 벡터 스토어 설정 (폴백용)
-    VECTORSTORE_PATH: str = os.getenv(
-        "VECTORSTORE_PATH", 
-        os.path.join(os.path.dirname(os.path.dirname(__file__)), "vectorstore", "faiss_index")
-    )
-    
-    # 벡터 스토어 타입 설정
-    USE_PINECONE: bool = os.getenv("USE_PINECONE", "true").lower() == "true"
     
     # 모니터링 설정
     ENABLE_METRICS: bool = os.getenv("ENABLE_METRICS", "true").lower() == "true"
