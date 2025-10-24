@@ -48,7 +48,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
-    outputs: # 두 이미지 URI 모두 출력
+    outputs: 
       backend_image_uri: ${{ steps.set-output-uris.outputs.backend_uri }}
       frontend_image_uri: ${{ steps.set-output-uris.outputs.frontend_uri }}
     steps:
@@ -75,7 +75,7 @@ jobs:
           context: ./backend
           push: true
           tags: ${{ env.BACKEND_URI }}
-          platforms: linux/amd64 # Lambda용 아키텍처 명시
+          platforms: linux/x86_64 # Lambda용 아키텍처 명시
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
           build-args: |
@@ -86,7 +86,7 @@ jobs:
           context: ./frontend
           push: true
           tags: ${{ env.FRONTEND_URI }}
-          platforms: linux/amd64 # EC2(x86_64)용 아키텍처 명시
+          platforms: linux/x86_64 # EC2(x86_64)용 아키텍처 명시
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
           build-args: |
