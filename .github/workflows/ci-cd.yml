@@ -1,4 +1,4 @@
-name: CI/CD Pipeline to AWS (Hybrid: Lambda Backend, ECS Frontend)
+name: CI/CD Pipeline to AWS 
 
 on:
   push:
