@@ -5,9 +5,9 @@ FROM public.ecr.aws/lambda/python:3.12
 WORKDIR ${LAMBDA_TASK_ROOT}
 
 # 시스템 패키지 업데이트 및 빌드 도구 설치
-RUN yum update -y && \
-    yum install -y gcc gcc-c++ && \
-    yum clean all
+RUN microdnf update -y && \
+    microdnf install -y gcc gcc-c++ && \
+    microdnf clean all
 
 # Python 의존성 파일 복사
 COPY requirements.txt .
