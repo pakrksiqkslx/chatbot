@@ -1,5 +1,5 @@
 # 멀티스테이지 빌드로 최적화
-FROM node:18-alpine AS builder
+FROM node:18-alpine AS deps
 
 # 작업 디렉토리 설정
 WORKDIR /app
@@ -7,8 +7,20 @@ WORKDIR /app
 # package.json과 package-lock.json 복사
 COPY package*.json ./
 
-# 의존성 설치 (dev 의존성 포함)
-RUN npm ci
+# 의존성 설치 (캐시 최적화)
+RUN npm ci --only=production && npm cache clean --force
+
+# 빌드 스테이지
+FROM node:18-alpine AS builder
+
+# 작업 디렉토리 설정
+WORKDIR /app
+
+# 의존성 복사
+COPY --from=deps /app/node_modules ./node_modules
+
+# package.json과 package-lock.json 복사
+COPY package*.json ./
 
 # 소스 코드 복사
 COPY . .
@@ -39,6 +51,14 @@ RUN echo 'server { \
         expires 1y; \
         add_header Cache-Control "public, immutable"; \
     } \
+    location /assets/ { \
+        expires 1y; \
+        add_header Cache-Control "public, immutable"; \
+    } \
+    gzip on; \
+    gzip_vary on; \
+    gzip_min_length 1024; \
+    gzip_types text/plain text/css text/xml text/javascript application/javascript application/xml+rss application/json; \
 }' > /etc/nginx/conf.d/default.conf
 
 # 포트 노출
