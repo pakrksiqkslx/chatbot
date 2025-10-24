@@ -7,13 +7,8 @@ WORKDIR ${LAMBDA_TASK_ROOT}
 # Python 의존성 파일 복사
 COPY requirements.txt .
 
-# 의존성 설치
-RUN pip install --no-cache-dir -r requirements.txt
-
-# HuggingFace 캐시 디렉토리 설정
-ENV HF_HOME=/tmp/.cache/huggingface
-ENV TRANSFORMERS_CACHE=/tmp/.cache/huggingface
-ENV SENTENCE_TRANSFORMERS_HOME=/tmp/.cache/sentence-transformers
+# 의존성 설치 (Lambda 호환성을 위해 단순화)
+RUN pip install -r requirements.txt
 
 # 애플리케이션 코드 복사
 COPY . .
