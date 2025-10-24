@@ -13,8 +13,8 @@ RUN microdnf update -y && \
 COPY requirements.txt .
 
 # 의존성 설치
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip --root-user-action=ignore && \
+    pip install --no-cache-dir -r requirements.txt --root-user-action=ignore
 
 # HuggingFace 캐시 디렉토리 설정
 ENV HF_HOME=/tmp/.cache/huggingface

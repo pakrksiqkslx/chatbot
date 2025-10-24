@@ -44,13 +44,12 @@ jobs:
           cd backend
           echo "Tests placeholder - add your tests here"
 
-  build-and-push: # 프론트엔드와 백엔드 이미지를 모두 빌드 및 푸시
+  build-backend: # 백엔드 이미지 빌드 및 푸시
     needs: test
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
-    outputs: 
-      backend_image_uri: ${{ steps.set-output-uris.outputs.backend_uri }}
-      frontend_image_uri: ${{ steps.set-output-uris.outputs.frontend_uri }}
+    outputs:
+      image_uri: ${{ steps.set-output-uri.outputs.backend_uri }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -62,11 +61,10 @@ jobs:
       - name: Log in to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
-      - name: Define image URIs # 두 이미지 URI 모두 정의
-        id: define-uris
+      - name: Define backend image URI
+        id: define-uri
         run: |
           echo "BACKEND_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_BACKEND_REPOSITORY }}:${{ github.sha }}" >> $GITHUB_ENV
-          echo "FRONTEND_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_FRONTEND_REPOSITORY }}:${{ github.sha }}" >> $GITHUB_ENV
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Build and push backend image
@@ -80,7 +78,36 @@ jobs:
           cache-to: type=gha,mode=max,scope=backend
           build-args: |
             DEBIAN_FRONTEND=noninteractive
-      - name: Build and push frontend image # 프론트엔드 이미지 빌드/푸시 추가
+          outputs: type=registry
+      - name: Set job output
+        id: set-output-uri
+        run: |
+          echo "backend_uri=${{ env.BACKEND_URI }}" >> $GITHUB_OUTPUT
+
+  build-frontend: # 프론트엔드 이미지 빌드 및 푸시
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    outputs:
+      image_uri: ${{ steps.set-output-uri.outputs.frontend_uri }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Define frontend image URI
+        id: define-uri
+        run: |
+          echo "FRONTEND_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_FRONTEND_REPOSITORY }}:${{ github.sha }}" >> $GITHUB_ENV
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build and push frontend image
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
@@ -91,14 +118,14 @@ jobs:
           cache-to: type=gha,mode=max,scope=frontend
           build-args: |
             DEBIAN_FRONTEND=noninteractive
-      - name: Set job outputs # 두 이미지 URI 모두 출력
-        id: set-output-uris
+          outputs: type=registry
+      - name: Set job output
+        id: set-output-uri
         run: |
-          echo "backend_uri=${{ env.BACKEND_URI }}" >> $GITHUB_OUTPUT
           echo "frontend_uri=${{ env.FRONTEND_URI }}" >> $GITHUB_OUTPUT
 
   deploy-hybrid: # 배포 작업 이름 변경
-    needs: build-and-push
+    needs: [build-backend, build-frontend]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
@@ -114,10 +141,10 @@ jobs:
       - name: Update Backend Lambda function code
         id: update-lambda
         run: |
-          echo "Updating Lambda function ${{ env.LAMBDA_FUNCTION_NAME }} with image ${{ needs.build-and-push.outputs.backend_image_uri }}"
+          echo "Updating Lambda function ${{ env.LAMBDA_FUNCTION_NAME }} with image ${{ needs.build-backend.outputs.image_uri }}"
           aws lambda update-function-code \
             --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
-            --image-uri ${{ needs.build-and-push.outputs.backend_image_uri }}
+            --image-uri ${{ needs.build-backend.outputs.image_uri }}
       - name: Wait for Lambda update to complete
         run: |
           echo "Waiting for Lambda function update to complete..."
@@ -132,7 +159,7 @@ jobs:
 
           # 프론트엔드 컨테이너의 새 이미지 주소로 교체
           NEW_TASK_DEF_JSON=$(echo $TASK_DEF_JSON | \
-            jq --arg IMAGE_FRONTEND "${{ needs.build-and-push.outputs.frontend_image_uri }}" \
+            jq --arg IMAGE_FRONTEND "${{ needs.build-frontend.outputs.image_uri }}" \
                --arg CONTAINER_FRONTEND "$CONTAINER_FRONTEND_NAME" \
                '( .containerDefinitions[] | select(.name == $CONTAINER_FRONTEND) ).image = $IMAGE_FRONTEND')
           
