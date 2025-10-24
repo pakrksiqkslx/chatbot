@@ -7,6 +7,7 @@ import logging
 from config import settings
 from direct_pinecone_service import get_vectorstore_service
 from hyperclova_client import get_hyperclova_client
+from mangum import Mangum
 
 # 로깅 설정
 logging.basicConfig(
@@ -161,6 +162,9 @@ async def chat(request: ChatRequest):
             status_code=500, 
             detail="서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
         )
+
+# Lambda 핸들러 생성
+lambda_handler = Mangum(app)
 
 if __name__ == "__main__":
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")

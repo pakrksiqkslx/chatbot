@@ -3,6 +3,7 @@ fastapi>=0.104.1
 uvicorn[standard]>=0.24.0
 pydantic>=2.5.0
 pydantic-settings>=2.1.0
+mangum>=0.17.0
 
 # LangChain 및 벡터 검색
 langchain>=0.3.0
