@@ -143,7 +143,7 @@ jobs:
           aws lambda update-function-code \
             --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
             --image-uri ${{ needs.build-backend.outputs.image_uri }}
-git      - name: Update Lambda function configuration
+      - name: Update Lambda function configuration
         run: |
           echo "Updating Lambda function configuration..."
           aws lambda update-function-configuration \
