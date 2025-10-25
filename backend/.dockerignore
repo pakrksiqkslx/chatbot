@@ -1,3 +1,9 @@
+# Git 관련
+.git
+.gitignore
+.gitattributes
+
+# Python 관련
 __pycache__
 *.pyc
 *.pyo
@@ -19,22 +25,51 @@ coverage.xml
 .pytest_cache
 .hypothesis
 
-.DS_Store
-.vscode
-.idea
+# 개발 환경
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
 *.swp
 *.swo
+*~
 
-# Virtual environments
-venv/
-env/
-ENV/
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
-# Documentation
-README.md
+# 문서
 *.md
+README*
+LICENSE*
+CHANGELOG*
+CONTRIBUTING*
 
-# Test files
+# 테스트
+tests/
 test_*
 *_test.py
-tests/
+pytest.ini
+tox.ini
+
+# 기타
+.dockerignore
+Dockerfile*
+docker-compose*
+.dockerignore
+*.log
+logs/
+tmp/
+temp/

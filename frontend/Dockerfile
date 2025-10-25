@@ -7,8 +7,10 @@ WORKDIR /app
 # package.json과 package-lock.json 복사
 COPY package*.json ./
 
-# 의존성 설치 (캐시 최적화)
-RUN npm ci --only=production && npm cache clean --force
+# 의존성 설치 최적화
+RUN npm ci --only=production --no-audit --no-fund && \
+    npm cache clean --force && \
+    rm -rf /tmp/* /var/cache/apk/*
 
 # 빌드 스테이지
 FROM node:18-alpine AS builder
@@ -25,40 +27,72 @@ COPY package*.json ./
 # 소스 코드 복사
 COPY . .
 
-# 프로덕션 빌드
-RUN npm run build
+# 프로덕션 빌드 최적화
+RUN npm run build && \
+    rm -rf node_modules && \
+    rm -rf src && \
+    rm -rf public && \
+    rm -rf package*.json && \
+    rm -rf README.md && \
+    rm -rf .git* && \
+    rm -rf *.md
 
-# 프로덕션 이미지
+# 프로덕션 이미지 (nginx:alpine 최적화)
 FROM nginx:alpine AS production
 
-# 비root 사용자 생성
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nextjs -u 1001
+# 불필요한 패키지 제거 및 최적화
+RUN apk del --no-cache apk-tools && \
+    rm -rf /var/cache/apk/* /tmp/* /var/tmp/* && \
+    rm -rf /usr/share/man/* /usr/share/doc/*
 
 # nginx 설정 파일 복사
 COPY --from=builder /app/build /usr/share/nginx/html
 
-# nginx 설정 최적화
+# nginx 설정 최적화 (압축 및 캐싱)
 RUN echo 'server { \
     listen 3000; \
     server_name localhost; \
     root /usr/share/nginx/html; \
     index index.html; \
-    location / { \
-        try_files $uri $uri/ /index.html; \
-    } \
-    location /static/ { \
-        expires 1y; \
-        add_header Cache-Control "public, immutable"; \
-    } \
-    location /assets/ { \
-        expires 1y; \
-        add_header Cache-Control "public, immutable"; \
-    } \
+    \
+    # Gzip 압축 설정 \
     gzip on; \
     gzip_vary on; \
     gzip_min_length 1024; \
-    gzip_types text/plain text/css text/xml text/javascript application/javascript application/xml+rss application/json; \
+    gzip_comp_level 6; \
+    gzip_types \
+        text/plain \
+        text/css \
+        text/xml \
+        text/javascript \
+        application/javascript \
+        application/xml+rss \
+        application/json \
+        application/xml \
+        image/svg+xml; \
+    \
+    # 정적 파일 캐싱 \
+    location /static/ { \
+        expires 1y; \
+        add_header Cache-Control "public, immutable"; \
+        access_log off; \
+    } \
+    \
+    location /assets/ { \
+        expires 1y; \
+        add_header Cache-Control "public, immutable"; \
+        access_log off; \
+    } \
+    \
+    # 메인 라우팅 \
+    location / { \
+        try_files $uri $uri/ /index.html; \
+    } \
+    \
+    # 보안 헤더 \
+    add_header X-Frame-Options "SAMEORIGIN" always; \
+    add_header X-Content-Type-Options "nosniff" always; \
+    add_header X-XSS-Protection "1; mode=block" always; \
 }' > /etc/nginx/conf.d/default.conf
 
 # 포트 노출
