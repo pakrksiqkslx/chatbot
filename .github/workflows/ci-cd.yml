@@ -170,7 +170,10 @@ jobs:
               "LOG_LEVEL": "INFO",
               "HF_HOME": "/tmp/.cache/huggingface",
               "TRANSFORMERS_CACHE": "/tmp/.cache/huggingface",
-              "SENTENCE_TRANSFORMERS_HOME": "/tmp/.cache/sentence-transformers"
+              "SENTENCE_TRANSFORMERS_HOME": "/tmp/.cache/sentence-transformers",
+              "PINECONE_API_KEY_PARAM": "/chatbot/prod/PINECONE_API_KEY",
+              "PINECONE_INDEX_NAME_PARAM": "/chatbot/prod/PINECONE_INDEX_NAME",
+              "HYPERCLOVA_API_KEY_PARAM": "/chatbot/prod/HYPERCLOVA_API_KEY"
             }
           }
           EOF
