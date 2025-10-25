@@ -15,13 +15,16 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # 애플리케이션 코드 복사
 COPY . .
 
-# 불필요한 파일 제거
-RUN find . -type f -name "*.pyc" -delete && \
-    find . -type d -name "__pycache__" -exec rm -rf {} + && \
-    find . -type d -name "*.egg-info" -exec rm -rf {} + && \
-    find . -type d -name ".git" -exec rm -rf {} + && \
-    find . -type f -name "*.md" -delete && \
-    find . -type f -name "*.txt" ! -name "requirements.txt" -delete
+# 불필요한 파일 제거 (Lambda 환경에 맞게 최적화)
+RUN rm -rf __pycache__ && \
+    rm -rf .git && \
+    rm -rf *.egg-info && \
+    rm -rf .pytest_cache && \
+    rm -rf .mypy_cache && \
+    rm -rf .coverage && \
+    rm -rf *.pyc && \
+    rm -rf *.pyo && \
+    rm -rf *.pyd
 
 # Lambda 핸들러 설정
 CMD ["main.lambda_handler"]
