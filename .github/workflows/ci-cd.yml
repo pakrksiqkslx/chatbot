@@ -146,11 +146,24 @@ jobs:
       - name: Update Lambda function configuration
         run: |
           echo "Updating Lambda function configuration..."
+          # 환경 변수 JSON 파일 생성
+          cat > env_vars.json << EOF
+          {
+            "Variables": {
+              "ENVIRONMENT": "production",
+              "LOG_LEVEL": "INFO",
+              "HF_HOME": "/tmp/.cache/huggingface",
+              "TRANSFORMERS_CACHE": "/tmp/.cache/huggingface",
+              "SENTENCE_TRANSFORMERS_HOME": "/tmp/.cache/sentence-transformers"
+            }
+          }
+          EOF
+          
           aws lambda update-function-configuration \
             --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
             --memory-size 1024 \
             --timeout 300 \
-            --environment Variables='{"ENVIRONMENT":"production","LOG_LEVEL":"INFO","HF_HOME":"/tmp/.cache/huggingface","TRANSFORMERS_CACHE":"/tmp/.cache/huggingface","SENTENCE_TRANSFORMERS_HOME":"/tmp/.cache/sentence-transformers"}'
+            --environment file://env_vars.json
       - name: Wait for Lambda update to complete
         run: |
           echo "Waiting for Lambda function update to complete..."
