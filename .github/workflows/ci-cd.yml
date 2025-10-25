@@ -150,13 +150,7 @@ jobs:
             --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
             --memory-size 1024 \
             --timeout 300 \
-            --environment Variables='{
-              "ENVIRONMENT": "production",
-              "LOG_LEVEL": "INFO",
-              "HF_HOME": "/tmp/.cache/huggingface",
-              "TRANSFORMERS_CACHE": "/tmp/.cache/huggingface",
-              "SENTENCE_TRANSFORMERS_HOME": "/tmp/.cache/sentence-transformers"
-            }'
+            --environment Variables='{"ENVIRONMENT":"production","LOG_LEVEL":"INFO","HF_HOME":"/tmp/.cache/huggingface","TRANSFORMERS_CACHE":"/tmp/.cache/huggingface","SENTENCE_TRANSFORMERS_HOME":"/tmp/.cache/sentence-transformers"}'
       - name: Wait for Lambda update to complete
         run: |
           echo "Waiting for Lambda function update to complete..."
