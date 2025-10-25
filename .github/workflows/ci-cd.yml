@@ -143,9 +143,25 @@ jobs:
           aws lambda update-function-code \
             --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
             --image-uri ${{ needs.build-backend.outputs.image_uri }}
+      
+      - name: Wait for code update to complete
+        run: |
+          echo "Waiting for Lambda function code update to complete..."
+          aws lambda wait function-updated-v2 --function-name ${{ env.LAMBDA_FUNCTION_NAME }}
+          echo "Code update completed!"
+          
+          # 추가 대기 시간 (안전을 위해)
+          echo "Additional 30 seconds wait for stability..."
+          sleep 30
+          
+          # 상태 확인
+          echo "Current Lambda function status:"
+          aws lambda get-function --function-name ${{ env.LAMBDA_FUNCTION_NAME }} --query 'Configuration.{State:State,LastUpdateStatus:LastUpdateStatus,StateReason:StateReason,StateReasonCode:StateReasonCode}'
+      
       - name: Update Lambda function configuration
         run: |
           echo "Updating Lambda function configuration..."
+          
           # 환경 변수 JSON 파일 생성
           cat > env_vars.json << EOF
           {
@@ -164,15 +180,21 @@ jobs:
             --memory-size 1024 \
             --timeout 300 \
             --environment file://env_vars.json
-      - name: Wait for Lambda update to complete
+      
+      - name: Wait for configuration update to complete
         run: |
-          echo "Waiting for Lambda function update to complete..."
+          echo "Waiting for Lambda function configuration update to complete..."
           aws lambda wait function-updated-v2 --function-name ${{ env.LAMBDA_FUNCTION_NAME }}
-          echo "Lambda function update complete!"
-      - name: Check Lambda function status
+          echo "Configuration update completed!"
+          
+          # 추가 대기 시간
+          echo "Additional 30 seconds wait for stability..."
+          sleep 30
+      
+      - name: Final Lambda function status check
         run: |
-          echo "Checking Lambda function status..."
-          aws lambda get-function --function-name ${{ env.LAMBDA_FUNCTION_NAME }} --query 'Configuration.{State:State,LastUpdateStatus:LastUpdateStatus,StateReason:StateReason,StateReasonCode:StateReasonCode}'
+          echo "Final Lambda function status:"
+          aws lambda get-function --function-name ${{ env.LAMBDA_FUNCTION_NAME }} --query 'Configuration.{State:State,LastUpdateStatus:LastUpdateStatus,StateReason:StateReason,StateReasonCode:StateReasonCode,LastModified:LastModified}'
 
       # --- 2. 프론트엔드: ECS 서비스 업데이트 ---
       - name: Deploy Frontend to Amazon ECS
