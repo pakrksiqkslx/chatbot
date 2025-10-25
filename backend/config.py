@@ -2,6 +2,7 @@
 애플리케이션 설정 관리
 """
 import os
+import boto3
 from typing import Optional
 from pathlib import Path
 from dotenv import load_dotenv
@@ -26,6 +27,32 @@ elif root_env.exists():
             load_dotenv(root_env, encoding='utf-16')
         except:
             pass  # .env 파일을 읽을 수 없으면 환경변수에서 직접 읽음
+
+
+def get_parameter_store_value(parameter_name: str, default_value: str = "") -> str:
+    """
+    AWS Systems Manager Parameter Store에서 값을 가져옵니다.
+    
+    Args:
+        parameter_name: Parameter Store의 파라미터 이름
+        default_value: 값을 가져올 수 없을 때 사용할 기본값
+        
+    Returns:
+        Parameter Store에서 가져온 값 또는 기본값
+    """
+    try:
+        # Lambda 환경에서는 boto3 클라이언트를 자동으로 생성
+        ssm_client = boto3.client('ssm')
+        
+        response = ssm_client.get_parameter(
+            Name=parameter_name,
+            WithDecryption=True  # SecureString 파라미터의 경우 복호화
+        )
+        
+        return response['Parameter']['Value']
+    except Exception as e:
+        print(f"Warning: Could not retrieve parameter {parameter_name}: {e}")
+        return default_value
 
 
 class Settings:
@@ -61,10 +88,36 @@ class Settings:
     PINECONE_API_KEY: str = os.getenv("PINECONE_API_KEY", "")
     PINECONE_INDEX_NAME: str = os.getenv("PINECONE_INDEX_NAME", "chatbot-courses")
     
+    def __init__(self):
+        """설정 초기화 시 Parameter Store에서 값 가져오기"""
+        # Parameter Store 파라미터 이름들
+        pinecone_api_key_param = os.getenv("PINECONE_API_KEY_PARAM")
+        pinecone_index_name_param = os.getenv("PINECONE_INDEX_NAME_PARAM")
+        hyperclova_api_key_param = os.getenv("HYPERCLOVA_API_KEY_PARAM")
+        
+        # Parameter Store에서 값 가져오기 (환경변수가 없으면 기본값 사용)
+        if pinecone_api_key_param:
+            self.PINECONE_API_KEY = get_parameter_store_value(
+                pinecone_api_key_param, 
+                self.PINECONE_API_KEY
+            )
+        
+        if pinecone_index_name_param:
+            self.PINECONE_INDEX_NAME = get_parameter_store_value(
+                pinecone_index_name_param, 
+                self.PINECONE_INDEX_NAME
+            )
+        
+        if hyperclova_api_key_param:
+            self.HYPERCLOVA_API_KEY = get_parameter_store_value(
+                hyperclova_api_key_param, 
+                self.HYPERCLOVA_API_KEY
+            )
+    
     # 모니터링 설정
     ENABLE_METRICS: bool = os.getenv("ENABLE_METRICS", "true").lower() == "true"
     ENABLE_HEALTH_CHECK: bool = os.getenv("ENABLE_HEALTH_CHECK", "true").lower() == "true"
 
 
-# 전역 설정 인스턴스
+# 전역 설정 인스턴스 (Parameter Store 값 포함)
 settings = Settings()
