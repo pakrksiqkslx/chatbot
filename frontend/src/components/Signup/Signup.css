@@ -4,6 +4,7 @@
   align-items: center;
   height: 100vh;
   background: #f7f8fa;
+  position: relative;
 }
 .signup-form {
   background: #fff;
@@ -14,6 +15,23 @@
   flex-direction: column;
   gap: 16px;
   min-width: 320px;
+}
+.back-btn {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  background: #1976d2;
+  color: white;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 8px 16px;
+  border-radius: 8px;
+  transition: background 0.2s ease;
+  font-weight: 500;
+}
+.back-btn:hover {
+  background: #1565c0;
 }
 .signup-form h2 {
   margin-bottom: 8px;

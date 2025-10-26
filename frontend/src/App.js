@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import './App.css';
 import Header from './components/Header/Header';
 import ChatWindow from './components/ChatWindow/ChatWindow';
@@ -25,7 +26,8 @@ function makeDefaultSession() {
   };
 }
 
-function App() {
+function MainApp() {
+  const navigate = useNavigate();
   // 상태 관리
   const [sessions, setSessions] = useState([makeDefaultSession()]);
   const [currentSessionIdx, setCurrentSessionIdx] = useState(0);
@@ -33,8 +35,6 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pendingSession, setPendingSession] = useState(null);
   const [user, setUser] = useState(null);
-  const [showSignup, setShowSignup] = useState(false);
-  const [showLogin, setShowLogin] = useState(false);
   const [currentPage, setCurrentPage] = useState('chat'); // 페이지 상태 추가
 
   React.useEffect(() => {
@@ -144,36 +144,7 @@ function App() {
 
   function handleLogout() {
     setUser(null);
-    setShowLogin(false);
-    setShowSignup(false);
-  }
-
-  // 로그인 화면이 우선적으로 보이도록 분기
-  if (!user && showLogin) {
-    return (
-      <Login
-        onLogin={email => {
-          setUser(email);
-          setShowLogin(false);
-        }}
-        onSignup={() => {
-          setShowSignup(true);
-          setShowLogin(false);
-        }}
-      />
-    );
-  }
-
-  // 회원가입 화면 분기
-  if (!user && showSignup) {
-    return (
-      <Signup
-        onSignup={email => {
-          setUser(email);
-          setShowSignup(false);
-        }}
-      />
-    );
+    navigate('/');
   }
 
   // StudyPlan 페이지
@@ -220,8 +191,7 @@ function App() {
         sidebarOpen={sidebarOpen}
         onNewChat={handleNewChat}
         onLoginClick={() => {
-          setShowLogin(true);
-          setShowSignup(false);
+          navigate('/login');
         }}
         onLogoutClick={handleLogout}
         isLoggedIn={!!user}
@@ -231,6 +201,57 @@ function App() {
         onPageChange={setCurrentPage}
       />
     </div>
+  );
+}
+
+// 독립적인 로그인 컴포넌트
+function LoginPage() {
+  const navigate = useNavigate();
+  
+  return (
+    <Login
+      onLogin={email => {
+        // 로그인 성공 후 메인 페이지로 이동
+        navigate('/');
+      }}
+      onSignup={() => {
+        navigate('/signup');
+      }}
+      onBack={() => {
+        navigate('/');
+      }}
+    />
+  );
+}
+
+// 독립적인 회원가입 컴포넌트
+function SignupPage() {
+  const navigate = useNavigate();
+  
+  return (
+    <Signup
+      onSignup={email => {
+        // 회원가입 성공 후 메인 페이지로 이동
+        navigate('/');
+      }}
+      onBack={() => {
+        navigate('/login');
+      }}
+    />
+  );
+}
+
+// 메인 App 컴포넌트 (라우터 설정)
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<MainApp />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Router>
   );
 }
 
