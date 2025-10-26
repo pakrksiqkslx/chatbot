@@ -1,23 +1,38 @@
 import React, { useState } from 'react';
+import { authAPI } from '../../utils/api';
 import './Login.css';
 
 export default function Login({ onLogin, onSignup, onBack }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     if (!email || !password) {
       setError('이메일과 비밀번호를 입력하세요.');
       return;
     }
-    // 예시: 간단한 인증 로직 (실제 서비스에서는 API 호출 필요)
-    if (email === 'test@test.com' && password === '1234') {
-      setError('');
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const response = await authAPI.login(email, password);
+      
+      // 로그인 성공시 토큰을 localStorage에 저장
+      if (response.token) {
+        localStorage.setItem('authToken', response.token);
+        localStorage.setItem('userEmail', email);
+      }
+      
       onLogin(email);
-    } else {
-      setError('이메일 또는 비밀번호가 올바르지 않습니다.');
+    } catch (error) {
+      console.error('Login failed:', error);
+      setError(error.message || '로그인에 실패했습니다. 이메일과 비밀번호를 확인하세요.');
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -47,7 +62,9 @@ export default function Login({ onLogin, onSignup, onBack }) {
           onChange={e => setPassword(e.target.value)}
         />
         {error && <div className="login-error">{error}</div>}
-        <button type="submit">로그인</button>
+        <button type="submit" disabled={isLoading}>
+          {isLoading ? '로그인 중...' : '로그인'}
+        </button>
         <button
           type="button"
           className="login-signup-btn"

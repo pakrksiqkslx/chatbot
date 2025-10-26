@@ -33,7 +33,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - REACT_APP_API_URL=http://backend:5000
+      - REACT_APP_API_URL=https://qf8ki1v4e9.execute-api.ap-southeast-2.amazonaws.com/prod
+      - REACT_APP_ENV=production
       - NODE_ENV=production
     depends_on:
       backend:
