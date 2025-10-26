@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import './Login.css';
 
-export default function Login({ onLogin, onSignup }) {
+export default function Login({ onLogin, onSignup, onBack }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -23,6 +23,15 @@ export default function Login({ onLogin, onSignup }) {
 
   return (
     <div className="login-container">
+      {onBack && (
+        <button
+          type="button"
+          className="back-btn"
+          onClick={onBack}
+        >
+          ← 뒤로가기
+        </button>
+      )}
       <form className="login-form" onSubmit={handleSubmit}>
         <h2>로그인</h2>
         <input

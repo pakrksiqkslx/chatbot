@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import './Signup.css';
 
-export default function Signup({ onSignup }) {
+export default function Signup({ onSignup, onBack }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -24,6 +24,15 @@ export default function Signup({ onSignup }) {
 
   return (
     <div className="signup-container">
+      {onBack && (
+        <button
+          type="button"
+          className="back-btn"
+          onClick={onBack}
+        >
+          ← 뒤로가기
+        </button>
+      )}
       <form className="signup-form" onSubmit={handleSubmit}>
         <h2>회원가입</h2>
         <input
