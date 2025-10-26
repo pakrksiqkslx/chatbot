@@ -76,14 +76,8 @@ class Settings:
     # 로깅 설정
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     
-    # MongoDB Atlas 설정
-    MONGODB_URI: str = os.getenv("MONGODB_URI", "")
-    MONGODB_DATABASE: str = os.getenv("MONGODB_DATABASE", "chatbot_db")
-
-    # JWT 인증 설정
-    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-this-in-production")
-    JWT_ALGORITHM: str = "HS256"
-    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))  # 24시간
+    # 데이터베이스 설정
+    DATABASE_URL: Optional[str] = os.getenv("DATABASE_URL")
     
     # 외부 API 설정 - HyperCLOVA X
     HYPERCLOVA_API_KEY: str = os.getenv("HYPERCLOVA_API_KEY", "")
