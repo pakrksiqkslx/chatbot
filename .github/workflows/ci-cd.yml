@@ -202,23 +202,78 @@ jobs:
       # --- 2. 프론트엔드: ECS 서비스 업데이트 ---
       - name: Deploy Frontend to Amazon ECS
         run: |
-          # 프론트엔드 전용 작업 정의 다운로드
+          echo "=== ECS Frontend Deployment ==="
+          echo "Cluster: $ECS_CLUSTER_NAME"
+          echo "Service: $ECS_FRONTEND_SERVICE_NAME"
+          echo "Task Definition: $ECS_FRONTEND_TASK_DEFINITION"
+          echo "Container: $CONTAINER_FRONTEND_NAME"
+          echo "New Image: ${{ needs.build-frontend.outputs.image_uri }}"
+          
+          # 기존 작업 정의 가져오기
+          echo "Getting current task definition..."
           TASK_DEF_JSON=$(aws ecs describe-task-definition --task-definition $ECS_FRONTEND_TASK_DEFINITION --query taskDefinition)
-
-          # 프론트엔드 컨테이너의 새 이미지 주소로 교체
-          NEW_TASK_DEF_JSON=$(echo $TASK_DEF_JSON | \
+          
+          if [ -z "$TASK_DEF_JSON" ] || [ "$TASK_DEF_JSON" = "null" ]; then
+            echo "Error: Could not retrieve task definition"
+            exit 1
+          fi
+          
+          echo "Current task definition retrieved successfully"
+          
+          # 새 이미지로 업데이트
+          echo "Updating container image..."
+          NEW_TASK_DEF_JSON=$(echo "$TASK_DEF_JSON" | \
             jq --arg IMAGE_FRONTEND "${{ needs.build-frontend.outputs.image_uri }}" \
                --arg CONTAINER_FRONTEND "$CONTAINER_FRONTEND_NAME" \
                '( .containerDefinitions[] | select(.name == $CONTAINER_FRONTEND) ).image = $IMAGE_FRONTEND')
           
-          # 등록에 필요한 키만 추출
-          NEW_TASK_DEF_INPUT=$(echo $NEW_TASK_DEF_JSON | jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy, .cpu, .memory)')
-
+          if [ -z "$NEW_TASK_DEF_JSON" ] || [ "$NEW_TASK_DEF_JSON" = "null" ]; then
+            echo "Error: Failed to update task definition JSON"
+            exit 1
+          fi
+          
+          # 메모리 설정 확인 및 추가
+          echo "Checking memory configuration..."
+          NEW_TASK_DEF_JSON=$(echo "$NEW_TASK_DEF_JSON" | jq '
+            .containerDefinitions[] |= if .name == "'$CONTAINER_FRONTEND_NAME'" then
+              . + if .memory == null then {memory: 512} else {} end +
+              if .memoryReservation == null then {memoryReservation: 256} else {} end
+            else . end
+          ')
+          
+          # 등록에 필요한 키만 추출 (메모리 관련 필드 제거)
+          echo "Preparing task definition for registration..."
+          NEW_TASK_DEF_INPUT=$(echo "$NEW_TASK_DEF_JSON" | jq 'del(
+            .taskDefinitionArn, 
+            .revision, 
+            .status, 
+            .requiresAttributes, 
+            .compatibilities, 
+            .registeredAt, 
+            .registeredBy
+          )')
+          
+          if [ -z "$NEW_TASK_DEF_INPUT" ] || [ "$NEW_TASK_DEF_INPUT" = "null" ]; then
+            echo "Error: Failed to prepare task definition input"
+            exit 1
+          fi
+          
           # 새 작업 정의 등록
+          echo "Registering new task definition..."
           NEW_REVISION_ARN=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEF_INPUT" | jq -r '.taskDefinition.taskDefinitionArn')
           
+          if [ -z "$NEW_REVISION_ARN" ] || [ "$NEW_REVISION_ARN" = "null" ]; then
+            echo "Error: Failed to register new task definition"
+            exit 1
+          fi
+          
+          echo "New task definition registered: $NEW_REVISION_ARN"
+          
           # 프론트엔드 서비스 업데이트
+          echo "Updating ECS service..."
           aws ecs update-service \
             --cluster $ECS_CLUSTER_NAME \
             --service $ECS_FRONTEND_SERVICE_NAME \
             --task-definition $NEW_REVISION_ARN
+            
+          echo "ECS service update initiated successfully!"
