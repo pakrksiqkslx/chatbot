@@ -173,7 +173,8 @@ jobs:
               "SENTENCE_TRANSFORMERS_HOME": "/tmp/.cache/sentence-transformers",
               "PINECONE_API_KEY_PARAM": "/chatbot/prod/PINECONE_API_KEY",
               "PINECONE_INDEX_NAME_PARAM": "/chatbot/prod/PINECONE_INDEX_NAME",
-              "HYPERCLOVA_API_KEY_PARAM": "/chatbot/prod/HYPERCLOVA_API_KEY"
+              "HYPERCLOVA_API_KEY_PARAM": "/chatbot/prod/HYPERCLOVA_API_KEY",
+              "PROD_HOST_PARAM": "/chatbot/prod/prod_host"
             }
           }
           EOF
