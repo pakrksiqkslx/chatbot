@@ -98,7 +98,6 @@ class Settings:
             pinecone_api_key_param = os.getenv("PINECONE_API_KEY_PARAM")
             pinecone_index_name_param = os.getenv("PINECONE_INDEX_NAME_PARAM")
             hyperclova_api_key_param = os.getenv("HYPERCLOVA_API_KEY_PARAM")
-            prod_host_param = os.getenv("PROD_HOST_PARAM", "/chatbot/prod/prod_host")
             
             # Parameter Store에서 값 가져오기 (환경변수가 없으면 기본값 사용)
             if pinecone_api_key_param:
@@ -128,29 +127,9 @@ class Settings:
                 except Exception as e:
                     print(f"Warning: Could not get HYPERCLOVA_API_KEY from Parameter Store: {e}")
             
-            # PROD_HOST를 Parameter Store에서 가져와서 ALLOWED_ORIGINS에 추가
-            try:
-                print(f"Attempting to get PROD_HOST from Parameter Store: {prod_host_param}")
-                prod_host = get_parameter_store_value(prod_host_param, "")
-                print(f"PROD_HOST value from Parameter Store: {prod_host}")
-                
-                if prod_host and prod_host.strip():
-                    origins_list = self.ALLOWED_ORIGINS.split(",")
-                    origins_list = [origin.strip() for origin in origins_list]  # 공백 제거
-                    if prod_host not in origins_list:
-                        origins_list.append(prod_host)
-                    
-                    # ALLOWED_ORIGINS를 리스트로 변환 (중복 제거)
-                    self.ALLOWED_ORIGINS = list(dict.fromkeys(origins_list))  # 순서 유지하면서 중복 제거
-                    print(f"Final ALLOWED_ORIGINS after adding PROD_HOST: {self.ALLOWED_ORIGINS}")
-                else:
-                    # prod_host가 없거나 비어있으면 문자열 그대로 사용
-                    self.ALLOWED_ORIGINS = self.ALLOWED_ORIGINS.split(",")
-                    print(f"No PROD_HOST value, using default ALLOWED_ORIGINS: {self.ALLOWED_ORIGINS}")
-            except Exception as e:
-                print(f"Warning: Could not get PROD_HOST from Parameter Store: {e}")
-                # 기본값 사용
-                self.ALLOWED_ORIGINS = self.ALLOWED_ORIGINS.split(",")
+            # ALLOWED_ORIGINS를 리스트로 변환
+            if isinstance(self.ALLOWED_ORIGINS, str):
+                self.ALLOWED_ORIGINS = [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",")]
                 
         except Exception as e:
             print(f"Warning: Settings initialization error: {e}")
