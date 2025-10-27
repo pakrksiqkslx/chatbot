@@ -93,39 +93,65 @@ class Settings:
     
     def __init__(self):
         """설정 초기화 시 Parameter Store에서 값 가져오기"""
-        # Parameter Store 파라미터 이름들
-        pinecone_api_key_param = os.getenv("PINECONE_API_KEY_PARAM")
-        pinecone_index_name_param = os.getenv("PINECONE_INDEX_NAME_PARAM")
-        hyperclova_api_key_param = os.getenv("HYPERCLOVA_API_KEY_PARAM")
-        prod_host_param = os.getenv("PROD_HOST_PARAM", "/chatbot/prod/prod_host")
-        
-        # Parameter Store에서 값 가져오기 (환경변수가 없으면 기본값 사용)
-        if pinecone_api_key_param:
-            self.PINECONE_API_KEY = get_parameter_store_value(
-                pinecone_api_key_param, 
-                self.PINECONE_API_KEY
-            )
-        
-        if pinecone_index_name_param:
-            self.PINECONE_INDEX_NAME = get_parameter_store_value(
-                pinecone_index_name_param, 
-                self.PINECONE_INDEX_NAME
-            )
-        
-        if hyperclova_api_key_param:
-            self.HYPERCLOVA_API_KEY = get_parameter_store_value(
-                hyperclova_api_key_param, 
-                self.HYPERCLOVA_API_KEY
-            )
-        
-        # PROD_HOST를 Parameter Store에서 가져와서 ALLOWED_ORIGINS에 추가
-        prod_host = get_parameter_store_value(prod_host_param, "")
-        origins_list = self.ALLOWED_ORIGINS.split(",")
-        if prod_host and prod_host not in origins_list:
-            origins_list.append(prod_host)
-        
-        # ALLOWED_ORIGINS를 리스트로 변환 (중복 제거)
-        self.ALLOWED_ORIGINS = list(dict.fromkeys(origins_list))  # 순서 유지하면서 중복 제거
+        try:
+            # Parameter Store 파라미터 이름들
+            pinecone_api_key_param = os.getenv("PINECONE_API_KEY_PARAM")
+            pinecone_index_name_param = os.getenv("PINECONE_INDEX_NAME_PARAM")
+            hyperclova_api_key_param = os.getenv("HYPERCLOVA_API_KEY_PARAM")
+            prod_host_param = os.getenv("PROD_HOST_PARAM", "/chatbot/prod/prod_host")
+            
+            # Parameter Store에서 값 가져오기 (환경변수가 없으면 기본값 사용)
+            if pinecone_api_key_param:
+                try:
+                    self.PINECONE_API_KEY = get_parameter_store_value(
+                        pinecone_api_key_param, 
+                        self.PINECONE_API_KEY
+                    )
+                except Exception as e:
+                    print(f"Warning: Could not get PINECONE_API_KEY from Parameter Store: {e}")
+            
+            if pinecone_index_name_param:
+                try:
+                    self.PINECONE_INDEX_NAME = get_parameter_store_value(
+                        pinecone_index_name_param, 
+                        self.PINECONE_INDEX_NAME
+                    )
+                except Exception as e:
+                    print(f"Warning: Could not get PINECONE_INDEX_NAME from Parameter Store: {e}")
+            
+            if hyperclova_api_key_param:
+                try:
+                    self.HYPERCLOVA_API_KEY = get_parameter_store_value(
+                        hyperclova_api_key_param, 
+                        self.HYPERCLOVA_API_KEY
+                    )
+                except Exception as e:
+                    print(f"Warning: Could not get HYPERCLOVA_API_KEY from Parameter Store: {e}")
+            
+            # PROD_HOST를 Parameter Store에서 가져와서 ALLOWED_ORIGINS에 추가
+            try:
+                prod_host = get_parameter_store_value(prod_host_param, "")
+                if prod_host and prod_host.strip():
+                    origins_list = self.ALLOWED_ORIGINS.split(",")
+                    origins_list = [origin.strip() for origin in origins_list]  # 공백 제거
+                    if prod_host not in origins_list:
+                        origins_list.append(prod_host)
+                    
+                    # ALLOWED_ORIGINS를 리스트로 변환 (중복 제거)
+                    self.ALLOWED_ORIGINS = list(dict.fromkeys(origins_list))  # 순서 유지하면서 중복 제거
+                else:
+                    # prod_host가 없거나 비어있으면 문자열 그대로 사용
+                    self.ALLOWED_ORIGINS = self.ALLOWED_ORIGINS.split(",")
+            except Exception as e:
+                print(f"Warning: Could not get PROD_HOST from Parameter Store: {e}")
+                # 기본값 사용
+                self.ALLOWED_ORIGINS = self.ALLOWED_ORIGINS.split(",")
+                
+        except Exception as e:
+            print(f"Warning: Settings initialization error: {e}")
+            # 기본값 사용 (문자열을 리스트로 변환)
+            if isinstance(self.ALLOWED_ORIGINS, str):
+                self.ALLOWED_ORIGINS = self.ALLOWED_ORIGINS.split(",")
     
     # 모니터링 설정
     ENABLE_METRICS: bool = os.getenv("ENABLE_METRICS", "true").lower() == "true"
