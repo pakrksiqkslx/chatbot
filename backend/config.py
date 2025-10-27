@@ -74,7 +74,7 @@ class Settings:
     
     # CORS 설정 - 기본 개발 origins
     DEFAULT_ORIGINS: str = "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000"
-    ALLOWED_ORIGINS: str = os.getenv("ALLOWED_ORIGINS", DEFAULT_ORIGINS)
+    ALLOWED_ORIGINS: str = os.getenv("ALLOWED_ORIGINS", DEFAULT_ORIGINS)  # 환경변수로 우선 설정 가능
     
     # 로깅 설정
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
@@ -130,7 +130,10 @@ class Settings:
             
             # PROD_HOST를 Parameter Store에서 가져와서 ALLOWED_ORIGINS에 추가
             try:
+                print(f"Attempting to get PROD_HOST from Parameter Store: {prod_host_param}")
                 prod_host = get_parameter_store_value(prod_host_param, "")
+                print(f"PROD_HOST value from Parameter Store: {prod_host}")
+                
                 if prod_host and prod_host.strip():
                     origins_list = self.ALLOWED_ORIGINS.split(",")
                     origins_list = [origin.strip() for origin in origins_list]  # 공백 제거
@@ -139,9 +142,11 @@ class Settings:
                     
                     # ALLOWED_ORIGINS를 리스트로 변환 (중복 제거)
                     self.ALLOWED_ORIGINS = list(dict.fromkeys(origins_list))  # 순서 유지하면서 중복 제거
+                    print(f"Final ALLOWED_ORIGINS after adding PROD_HOST: {self.ALLOWED_ORIGINS}")
                 else:
                     # prod_host가 없거나 비어있으면 문자열 그대로 사용
                     self.ALLOWED_ORIGINS = self.ALLOWED_ORIGINS.split(",")
+                    print(f"No PROD_HOST value, using default ALLOWED_ORIGINS: {self.ALLOWED_ORIGINS}")
             except Exception as e:
                 print(f"Warning: Could not get PROD_HOST from Parameter Store: {e}")
                 # 기본값 사용
