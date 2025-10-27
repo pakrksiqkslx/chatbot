@@ -168,13 +168,13 @@ jobs:
             "Variables": {
               "ENVIRONMENT": "production",
               "LOG_LEVEL": "INFO",
+              "ALLOWED_ORIGINS": "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://3.27.26.7",
               "HF_HOME": "/tmp/.cache/huggingface",
               "TRANSFORMERS_CACHE": "/tmp/.cache/huggingface",
               "SENTENCE_TRANSFORMERS_HOME": "/tmp/.cache/sentence-transformers",
               "PINECONE_API_KEY_PARAM": "/chatbot/prod/PINECONE_API_KEY",
               "PINECONE_INDEX_NAME_PARAM": "/chatbot/prod/PINECONE_INDEX_NAME",
-              "HYPERCLOVA_API_KEY_PARAM": "/chatbot/prod/HYPERCLOVA_API_KEY",
-              "PROD_HOST_PARAM": "/chatbot/prod/prod_host"
+              "HYPERCLOVA_API_KEY_PARAM": "/chatbot/prod/HYPERCLOVA_API_KEY"
             }
           }
           EOF
