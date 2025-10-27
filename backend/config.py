@@ -71,7 +71,10 @@ class Settings:
     
     # 보안 설정
     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-this")
-    ALLOWED_ORIGINS: list = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000").split(",")
+    
+    # CORS 설정 - 기본 개발 origins
+    DEFAULT_ORIGINS: str = "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000"
+    ALLOWED_ORIGINS: str = os.getenv("ALLOWED_ORIGINS", DEFAULT_ORIGINS)
     
     # 로깅 설정
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
@@ -94,6 +97,7 @@ class Settings:
         pinecone_api_key_param = os.getenv("PINECONE_API_KEY_PARAM")
         pinecone_index_name_param = os.getenv("PINECONE_INDEX_NAME_PARAM")
         hyperclova_api_key_param = os.getenv("HYPERCLOVA_API_KEY_PARAM")
+        prod_host_param = os.getenv("PROD_HOST_PARAM", "/chatbot/prod/prod_host")
         
         # Parameter Store에서 값 가져오기 (환경변수가 없으면 기본값 사용)
         if pinecone_api_key_param:
@@ -113,6 +117,15 @@ class Settings:
                 hyperclova_api_key_param, 
                 self.HYPERCLOVA_API_KEY
             )
+        
+        # PROD_HOST를 Parameter Store에서 가져와서 ALLOWED_ORIGINS에 추가
+        prod_host = get_parameter_store_value(prod_host_param, "")
+        origins_list = self.ALLOWED_ORIGINS.split(",")
+        if prod_host and prod_host not in origins_list:
+            origins_list.append(prod_host)
+        
+        # ALLOWED_ORIGINS를 리스트로 변환 (중복 제거)
+        self.ALLOWED_ORIGINS = list(dict.fromkeys(origins_list))  # 순서 유지하면서 중복 제거
     
     # 모니터링 설정
     ENABLE_METRICS: bool = os.getenv("ENABLE_METRICS", "true").lower() == "true"
