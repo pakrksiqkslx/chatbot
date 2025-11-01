@@ -114,42 +114,41 @@ jobs:
           role-to-assume: ${{ secrets.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # --- 통합 ECS 서비스 업데이트 ---
+      # ...existing code...
       - name: Deploy to Amazon ECS
         id: deploy-ecs
         run: |
-          # 통합 작업 정의 다운로드
-          TASK_DEF_JSON=$(aws ecs describe-task-definition --task-definition $ECS_TASK_DEFINITION --query taskDefinition)
+          # 통합 작업 정의 다운로드 (명시적으로 JSON 출력)
+          TASK_DEF_JSON=$(aws ecs describe-task-definition --task-definition $ECS_TASK_DEFINITION --query 'taskDefinition' --output json)
 
-          # 백엔드 컨테이너와 프론트엔드 컨테이너의 새 이미지 주소로 교체
-          # $TASK_DEF_JSON 변수에 따옴표를 추가하여 JSON 깨짐 방지
+          # 이미지 교체 (원본 문서 전체를 유지하면서 컨테이너 이미지만 업데이트)
           NEW_TASK_DEF_JSON=$(echo "$TASK_DEF_JSON" | \
             jq --arg IMAGE_BACKEND "${{ needs.build-and-push.outputs.backend_image_uri }}" \
                --arg CONTAINER_BACKEND "$CONTAINER_BACKEND_NAME" \
-               '( .containerDefinitions[] | select(.name == $CONTAINER_BACKEND) ).image = $IMAGE_BACKEND' | \
-            jq --arg IMAGE_FRONTEND "${{ needs.build-and-push.outputs.frontend_image_uri }}" \
+               --arg IMAGE_FRONTEND "${{ needs.build-and-push.outputs.frontend_image_uri }}" \
                --arg CONTAINER_FRONTEND "$CONTAINER_FRONTEND_NAME" \
-               '( .containerDefinitions[] | select(.name == $CONTAINER_FRONTEND) ).image = $IMAGE_FRONTEND')
+               '(.containerDefinitions[] | select(.name==$CONTAINER_BACKEND)).image = $IMAGE_BACKEND |
+                (.containerDefinitions[] | select(.name==$CONTAINER_FRONTEND)).image = $IMAGE_FRONTEND')
 
-          # 등록에 필요한 키만 정확히 추출 (EC2 유형에 맞게)
-          # 'taskRoleArn'이 null일 경우를 처리하고, 'volumes' 등 배열이 null일 경우 빈 배열 '[]'로 대체하도록 수정
-          # $NEW_TASK_DEF_JSON 변수에 따옴표를 추가하여 JSON 깨짐 방지
-          NEW_TASK_DEF_INPUT=$(echo "$NEW_TASK_DEF_JSON" | jq '{
+          # 필요한 키만 추출하고 null인 배열은 빈 배열로, taskRoleArn은 존재할 때만 포함
+          NEW_TASK_DEF_INPUT=$(echo "$NEW_TASK_DEF_JSON" | jq -c '{
               family: .family,
-              taskRoleArn: (if .taskRoleArn == null then empty else .taskRoleArn end),
               executionRoleArn: .executionRoleArn,
               networkMode: .networkMode,
               containerDefinitions: .containerDefinitions,
-              volumes: (if .volumes == null then [] else .volumes end),
-              placementConstraints: (if .placementConstraints == null then [] else .placementConstraints end),
-              requiresCompatibilities: (if .requiresCompatibilities == null then [] else .requiresCompatibilities end)
-          }')
+              volumes: (.volumes // []),
+              placementConstraints: (.placementConstraints // []),
+              requiresCompatibilities: (.requiresCompatibilities // [])
+            } + ( if .taskRoleArn then { taskRoleArn: .taskRoleArn } else {} end )')
+
+          # (디버깅) 생성된 JSON 확인: uncomment 하면 로그에 출력됨
+          # echo "$NEW_TASK_DEF_INPUT" | jq .
 
           # 새 작업 정의 등록
           NEW_TASK_DEF_REGISTER=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEF_INPUT")
-          NEW_REVISION_ARN=$(echo $NEW_TASK_DEF_REGISTER | jq -r '.taskDefinition.taskDefinitionArn')
+          NEW_REVISION_ARN=$(echo "$NEW_TASK_DEF_REGISTER" | jq -r '.taskDefinition.taskDefinitionArn')
           echo "task_definition_arn=$NEW_REVISION_ARN" >> $GITHUB_OUTPUT
-
+          
       - name: Update ECS Service
         run: |
           NEW_REVISION_ARN="${{ steps.deploy-ecs.outputs.task_definition_arn }}"
