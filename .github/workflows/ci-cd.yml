@@ -138,9 +138,9 @@ jobs:
               executionRoleArn: .executionRoleArn,
               networkMode: .networkMode,
               containerDefinitions: .containerDefinitions,
-              volumes: .volumes // [],
-              placementConstraints: .placementConstraints // [],
-              requiresCompatibilities: .requiresCompatibilities // []
+              volumes: (if .volumes == null then [] else .volumes end),
+              placementConstraints: (if .placementConstraints == null then [] else .placementConstraints end),
+              requiresCompatibilities: (if .requiresCompatibilities == null then [] else .requiresCompatibilities end)
           }')
 
           # 새 작업 정의 등록
