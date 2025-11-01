@@ -17,7 +17,7 @@ env:
   # --- 3. ECS (통합) 설정 (서울 리전에 생성한 이름과 일치) ---
   ECS_CLUSTER_NAME: chatbot-ec2-cluster
   ECS_SERVICE_NAME: chatbot-service           # 통합 서비스 이름
-  ECS_TASK_DEFINITION: app-task-definition    # 통합 작업 정의 이름
+  ECS_TASK_DEFINITION: chatbot-task-definition    # 통합 작업 정의 이름
   CONTAINER_BACKEND_NAME: backend-container   # 작업 정의 내부의 백엔드 컨테이너 이름
   CONTAINER_FRONTEND_NAME: frontend-container # 작업 정의 내부의 프론트엔드 컨테이너 이름
 
