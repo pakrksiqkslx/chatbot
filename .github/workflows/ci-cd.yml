@@ -131,16 +131,16 @@ jobs:
                '( .containerDefinitions[] | select(.name == $CONTAINER_FRONTEND) ).image = $IMAGE_FRONTEND')
 
           # 등록에 필요한 키만 정확히 추출 (EC2 유형에 맞게)
-          # 'taskRoleArn'이 null일 경우를 처리하도록 수정
+          # 'taskRoleArn'이 null일 경우를 처리하고, 'volumes' 등 배열이 null일 경우 빈 배열 '[]'로 대체하도록 수정
           NEW_TASK_DEF_INPUT=$(echo $NEW_TASK_DEF_JSON | jq '{
               family: .family,
               taskRoleArn: (if .taskRoleArn == null then empty else .taskRoleArn end),
               executionRoleArn: .executionRoleArn,
               networkMode: .networkMode,
               containerDefinitions: .containerDefinitions,
-              volumes: .volumes,
-              placementConstraints: .placementConstraints,
-              requiresCompatibilities: .requiresCompatibilities
+              volumes: .volumes // [],
+              placementConstraints: .placementConstraints // [],
+              requiresCompatibilities: .requiresCompatibilities // []
           }')
 
           # 새 작업 정의 등록
@@ -156,4 +156,3 @@ jobs:
             --cluster $ECS_CLUSTER_NAME \
             --service $ECS_SERVICE_NAME \
             --task-definition $NEW_REVISION_ARN
-
