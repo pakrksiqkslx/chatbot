@@ -27,19 +27,37 @@ app = FastAPI(
 
 # 보안 미들웨어 설정
 if settings.ENVIRONMENT == "production":
+    # 기본 허용 호스트(프로덕션 도메인)
+    allowed_hosts = ["*.bu-chatbot.co.kr"]
+
+    # 내부 테스트/헬스체크 용도로 로컬호스트를 허용하려면
+    # 환경변수 ALLOW_LOCALHOST_IN_PROD=true 로 켜십시오.
+    import os
+    if os.getenv("ALLOW_LOCALHOST_IN_PROD", "false").lower() in ("1", "true", "yes"):
+        allowed_hosts += ["localhost", "127.0.0.1"]
+
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=["localhost", "127.0.0.1", "*.yourdomain.com"]
+        allowed_hosts=allowed_hosts
     )
 
 # CORS middleware 설정
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
-)
+if settings.ALLOWED_ORIGINS == ["*"]:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.ALLOWED_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["*"],
+    )
 
 @app.get("/")
 async def root():

@@ -1,9 +1,10 @@
+# ...existing code...
 """
 애플리케이션 설정 관리
 """
 import os
 import boto3
-from typing import Optional
+from typing import Optional, List
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -72,9 +73,11 @@ class Settings:
     # 보안 설정
     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-this")
     
-    # CORS 설정 - 기본 개발 origins
-    DEFAULT_ORIGINS: str = "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000"
-    ALLOWED_ORIGINS: str = os.getenv("ALLOWED_ORIGINS", DEFAULT_ORIGINS)  # 환경변수로 우선 설정 가능
+    # CORS 설정 - 환경별 기본값
+    DEFAULT_DEV_ORIGINS: str = "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000"
+    DEFAULT_PROD_ORIGINS: str = "https://bu-chatbot.co.kr"
+    ALLOWED_ORIGINS: List[str] = []
+    ALLOW_ALL_ORIGINS_IN_DEV: bool = os.getenv("ALLOW_ALL_ORIGINS_IN_DEV", "false").lower() == "true"
     
     # 로깅 설정
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
@@ -127,15 +130,25 @@ class Settings:
                 except Exception as e:
                     print(f"Warning: Could not get HYPERCLOVA_API_KEY from Parameter Store: {e}")
             
-            # ALLOWED_ORIGINS를 리스트로 변환
-            if isinstance(self.ALLOWED_ORIGINS, str):
-                self.ALLOWED_ORIGINS = [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",")]
+            # ALLOWED_ORIGINS를 환경 및 설정에 따라 리스트로 변환
+            if self.ENVIRONMENT == "production":
+                raw = os.getenv("ALLOWED_ORIGINS", self.DEFAULT_PROD_ORIGINS)
+            else:
+                raw = os.getenv("ALLOWED_ORIGINS", self.DEFAULT_DEV_ORIGINS)
+            
+            if isinstance(raw, str):
+                self.ALLOWED_ORIGINS = [origin.strip() for origin in raw.split(",") if origin.strip()]
+            
+            # 개발에서 모든 오리진 허용 옵션 처리 (주의: credentials와 함께 쓰면 브라우저에서 차단될 수 있음)
+            if not self.ENVIRONMENT == "production" and self.ALLOW_ALL_ORIGINS_IN_DEV:
+                self.ALLOWED_ORIGINS = ["*"]
                 
         except Exception as e:
             print(f"Warning: Settings initialization error: {e}")
             # 기본값 사용 (문자열을 리스트로 변환)
-            if isinstance(self.ALLOWED_ORIGINS, str):
-                self.ALLOWED_ORIGINS = self.ALLOWED_ORIGINS.split(",")
+            raw = os.getenv("ALLOWED_ORIGINS", self.DEFAULT_DEV_ORIGINS)
+            if isinstance(raw, str):
+                self.ALLOWED_ORIGINS = [origin.strip() for origin in raw.split(",") if origin.strip()]
     
     # 모니터링 설정
     ENABLE_METRICS: bool = os.getenv("ENABLE_METRICS", "true").lower() == "true"
@@ -144,3 +157,4 @@ class Settings:
 
 # 전역 설정 인스턴스 (Parameter Store 값 포함)
 settings = Settings()
+# ...existing code...
