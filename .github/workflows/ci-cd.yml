@@ -1,6 +1,3 @@
-# 서울 리전(ap-northeast-2) 배포용 .yml 파일
-# 프론트엔드와 백엔드를 모두 단일 ECS 서비스로 배포합니다.
-
 name: CI/CD Pipeline to AWS (ECS Only - Seoul)
 
 on:
@@ -13,14 +10,14 @@ env:
   # --- 1. AWS 리전을 'ap-northeast-2' (서울)로 변경 ---
   AWS_REGION: ap-northeast-2
 
-  # --- 2. ECR 리포지토리 이름
+  # --- 2. ECR 리포지토리 이름 (서울 리전에 생성한 이름과 일치) ---
   ECR_BACKEND_REPOSITORY: chatbot-backend
   ECR_FRONTEND_REPOSITORY: chatbot-frontend
   
-  # --- 3. ECS (통합) 설정 
+  # --- 3. ECS (통합) 설정 (서울 리전에 생성한 이름과 일치) ---
   ECS_CLUSTER_NAME: chatbot-ec2-cluster
   ECS_SERVICE_NAME: chatbot-service           # 통합 서비스 이름
-  ECS_TASK_DEFINITION: chatbot-task-definition    # 통합 작업 정의 이름
+  ECS_TASK_DEFINITION: app-task-definition    # 통합 작업 정의 이름
   CONTAINER_BACKEND_NAME: backend-container   # 작업 정의 내부의 백엔드 컨테이너 이름
   CONTAINER_FRONTEND_NAME: frontend-container # 작업 정의 내부의 프론트엔드 컨테이너 이름
 
@@ -134,10 +131,10 @@ jobs:
                '( .containerDefinitions[] | select(.name == $CONTAINER_FRONTEND) ).image = $IMAGE_FRONTEND')
 
           # 등록에 필요한 키만 정확히 추출 (EC2 유형에 맞게)
-          # role/null 및 cpu/memory:None 오류를 해결한 최종 스크립트
+          # 'taskRoleArn'이 null일 경우를 처리하도록 수정
           NEW_TASK_DEF_INPUT=$(echo $NEW_TASK_DEF_JSON | jq '{
               family: .family,
-              taskRoleArn: .taskRoleArn,
+              taskRoleArn: (if .taskRoleArn == null then empty else .taskRoleArn end),
               executionRoleArn: .executionRoleArn,
               networkMode: .networkMode,
               containerDefinitions: .containerDefinitions,
