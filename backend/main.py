@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel
@@ -7,7 +7,6 @@ import logging
 from config import settings
 from direct_pinecone_service import get_vectorstore_service
 from hyperclova_client import get_hyperclova_client
-from mangum import Mangum
 
 # 로깅 설정
 logging.basicConfig(
@@ -21,8 +20,9 @@ app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     debug=settings.DEBUG,
-    docs_url="/docs" if settings.ENVIRONMENT != "production" else None,
-    redoc_url="/redoc" if settings.ENVIRONMENT != "production" else None,
+    root_path=settings.ROOT_PATH,
+    docs_url=f"{settings.API_PREFIX}/docs" if settings.ENVIRONMENT != "production" else None,
+    redoc_url=f"{settings.API_PREFIX}/redoc" if settings.ENVIRONMENT != "production" else None,
 )
 
 # 보안 미들웨어 설정
@@ -59,7 +59,10 @@ else:
         allow_headers=["*"],
     )
 
-@app.get("/")
+router = APIRouter(prefix=settings.API_PREFIX)
+
+
+@router.get("/")
 async def root():
     """루트 엔드포인트"""
     return {
@@ -68,7 +71,7 @@ async def root():
         "environment": settings.ENVIRONMENT
     }
 
-@app.get("/health")
+@router.get("/health")
 async def health_check():
     """헬스 체크 엔드포인트"""
     return {
@@ -77,7 +80,7 @@ async def health_check():
         "version": settings.APP_VERSION
     }
 
-@app.get("/metrics")
+@router.get("/metrics")
 async def metrics():
     """메트릭 엔드포인트 (프로덕션에서는 Prometheus 등 사용)"""
     if not settings.ENABLE_METRICS:
@@ -104,7 +107,7 @@ class ChatResponse(BaseModel):
     sources: list = []
 
 
-@app.post("/chat", response_model=ChatResponse)
+@router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """
     수업계획서 기반 챗봇 엔드포인트
@@ -181,29 +184,7 @@ async def chat(request: ChatRequest):
             detail="서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
         )
 
-# Lambda 핸들러 생성
-def lambda_handler(event, context):
-    """Lambda 핸들러 래퍼"""
-    try:
-        logger.info(f"Lambda handler invoked")
-        logger.info(f"Event path: {event.get('path')}")
-        logger.info(f"Event method: {event.get('httpMethod')}")
-        logger.info(f"Settings ALLOWED_ORIGINS: {settings.ALLOWED_ORIGINS}")
-        
-        # Mangum 핸들러 호출
-        mangum_handler = Mangum(app, lifespan="auto")
-        response = mangum_handler(event, context)
-        logger.info(f"Lambda handler response: {response}")
-        return response
-    except Exception as e:
-        logger.error(f"Lambda handler error: {str(e)}", exc_info=True)
-        # Mangum 형식에 맞게 반환
-        import json
-        return {
-            "statusCode": 500,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"error": "Internal server error", "detail": str(e)})
-        }
+app.include_router(router)
 
 if __name__ == "__main__":
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")

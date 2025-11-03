@@ -43,7 +43,7 @@ function MainApp() {
 
   async function callChatAPI(userMessage) {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = process.env.REACT_APP_API_URL || (process.env.REACT_ENVIRONTMENT === 'development' ? 'http://localhost:5000/api' : '/api');
       const response = await fetch(`${apiUrl}/chat`, {
         method: 'POST',
         headers: {

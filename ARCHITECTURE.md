@@ -259,3 +259,4 @@ sequenceDiagram
 5. **VPC**: Lambda in VPC for enhanced security
 6. **CloudFront**: Custom domain with SSL
 
+
