@@ -3,7 +3,6 @@
 애플리케이션 설정 관리
 """
 import os
-import boto3
 from typing import Optional, List
 from pathlib import Path
 from dotenv import load_dotenv
@@ -30,31 +29,6 @@ elif root_env.exists():
             pass  # .env 파일을 읽을 수 없으면 환경변수에서 직접 읽음
 
 
-def get_parameter_store_value(parameter_name: str, default_value: str = "") -> str:
-    """
-    AWS Systems Manager Parameter Store에서 값을 가져옵니다.
-    
-    Args:
-        parameter_name: Parameter Store의 파라미터 이름
-        default_value: 값을 가져올 수 없을 때 사용할 기본값
-        
-    Returns:
-        Parameter Store에서 가져온 값 또는 기본값
-    """
-    try:
-        # Lambda 환경에서는 boto3 클라이언트를 자동으로 생성
-        ssm_client = boto3.client('ssm')
-        
-        response = ssm_client.get_parameter(
-            Name=parameter_name,
-            WithDecryption=True  # SecureString 파라미터의 경우 복호화
-        )
-        
-        return response['Parameter']['Value']
-    except Exception as e:
-        print(f"Warning: Could not retrieve parameter {parameter_name}: {e}")
-        return default_value
-
 
 class Settings:
     """애플리케이션 설정 클래스"""
@@ -64,14 +38,22 @@ class Settings:
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+    # API 경로 프리픽스 및 프록시 루트 경로
+    API_PREFIX: str = os.getenv("API_PREFIX", "/api")
+    ROOT_PATH: str = os.getenv("ROOT_PATH", "")
+    # 원격 주입 제거(ECS는 Task env/Secrets 사용)
     
     # 서버 설정
-    HOST: str = os.getenv("BACKEND_HOST", "0.0.0.0")
-    PORT: int = int(os.getenv("BACKEND_PORT", "5000"))
+    # 우선순위: PORT/HOST → BACKEND_PORT/BACKEND_HOST → 기본값
+    HOST: str = os.getenv("HOST", os.getenv("BACKEND_HOST", "0.0.0.0"))
+    PORT: int = int(os.getenv("PORT", os.getenv("BACKEND_PORT", "5000")))
     WORKERS: int = int(os.getenv("BACKEND_WORKERS", "1"))
     
     # 보안 설정
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-this")
+    # JWT 설정과 호환: JWT_SECRET_KEY가 있으면 SECRET_KEY 기본값으로 사용
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "dev-jwt-secret-key-change-me")
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
+    SECRET_KEY: str = os.getenv("SECRET_KEY", JWT_SECRET_KEY)
     
     # CORS 설정 - 환경별 기본값
     DEFAULT_DEV_ORIGINS: str = "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000"
@@ -82,8 +64,9 @@ class Settings:
     # 로깅 설정
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     
-    # 데이터베이스 설정
-    DATABASE_URL: Optional[str] = os.getenv("DATABASE_URL")
+    # 데이터베이스 설정 (MongoDB만 사용)
+    MONGODB_URI: Optional[str] = os.getenv("MONGODB_URI")
+    MONGODB_DATABASE: Optional[str] = os.getenv("MONGODB_DATABASE")
     
     # 외부 API 설정 - HyperCLOVA X
     HYPERCLOVA_API_KEY: str = os.getenv("HYPERCLOVA_API_KEY", "")
@@ -95,60 +78,19 @@ class Settings:
     PINECONE_INDEX_NAME: str = os.getenv("PINECONE_INDEX_NAME", "chatbot-courses")
     
     def __init__(self):
-        """설정 초기화 시 Parameter Store에서 값 가져오기"""
-        try:
-            # Parameter Store 파라미터 이름들
-            pinecone_api_key_param = os.getenv("PINECONE_API_KEY_PARAM")
-            pinecone_index_name_param = os.getenv("PINECONE_INDEX_NAME_PARAM")
-            hyperclova_api_key_param = os.getenv("HYPERCLOVA_API_KEY_PARAM")
-            
-            # Parameter Store에서 값 가져오기 (환경변수가 없으면 기본값 사용)
-            if pinecone_api_key_param:
-                try:
-                    self.PINECONE_API_KEY = get_parameter_store_value(
-                        pinecone_api_key_param, 
-                        self.PINECONE_API_KEY
-                    )
-                except Exception as e:
-                    print(f"Warning: Could not get PINECONE_API_KEY from Parameter Store: {e}")
-            
-            if pinecone_index_name_param:
-                try:
-                    self.PINECONE_INDEX_NAME = get_parameter_store_value(
-                        pinecone_index_name_param, 
-                        self.PINECONE_INDEX_NAME
-                    )
-                except Exception as e:
-                    print(f"Warning: Could not get PINECONE_INDEX_NAME from Parameter Store: {e}")
-            
-            if hyperclova_api_key_param:
-                try:
-                    self.HYPERCLOVA_API_KEY = get_parameter_store_value(
-                        hyperclova_api_key_param, 
-                        self.HYPERCLOVA_API_KEY
-                    )
-                except Exception as e:
-                    print(f"Warning: Could not get HYPERCLOVA_API_KEY from Parameter Store: {e}")
-            
-            # ALLOWED_ORIGINS를 환경 및 설정에 따라 리스트로 변환
-            if self.ENVIRONMENT == "production":
-                raw = os.getenv("ALLOWED_ORIGINS", self.DEFAULT_PROD_ORIGINS)
-            else:
-                raw = os.getenv("ALLOWED_ORIGINS", self.DEFAULT_DEV_ORIGINS)
-            
-            if isinstance(raw, str):
-                self.ALLOWED_ORIGINS = [origin.strip() for origin in raw.split(",") if origin.strip()]
-            
-            # 개발에서 모든 오리진 허용 옵션 처리 (주의: credentials와 함께 쓰면 브라우저에서 차단될 수 있음)
-            if not self.ENVIRONMENT == "production" and self.ALLOW_ALL_ORIGINS_IN_DEV:
-                self.ALLOWED_ORIGINS = ["*"]
-                
-        except Exception as e:
-            print(f"Warning: Settings initialization error: {e}")
-            # 기본값 사용 (문자열을 리스트로 변환)
+        """설정 초기화"""
+        # ALLOWED_ORIGINS를 환경 및 설정에 따라 리스트로 변환
+        if self.ENVIRONMENT == "production":
+            raw = os.getenv("ALLOWED_ORIGINS", self.DEFAULT_PROD_ORIGINS)
+        else:
             raw = os.getenv("ALLOWED_ORIGINS", self.DEFAULT_DEV_ORIGINS)
-            if isinstance(raw, str):
-                self.ALLOWED_ORIGINS = [origin.strip() for origin in raw.split(",") if origin.strip()]
+        
+        if isinstance(raw, str):
+            self.ALLOWED_ORIGINS = [origin.strip() for origin in raw.split(",") if origin.strip()]
+        
+        # 개발에서 모든 오리진 허용 옵션 처리
+        if not self.ENVIRONMENT == "production" and self.ALLOW_ALL_ORIGINS_IN_DEV:
+            self.ALLOWED_ORIGINS = ["*"]
     
     # 모니터링 설정
     ENABLE_METRICS: bool = os.getenv("ENABLE_METRICS", "true").lower() == "true"

@@ -25,3 +25,4 @@ echo "Done! Waiting for update to complete..."
 aws lambda wait function-updated-v2 --function-name $LAMBDA_FUNCTION_NAME --region $AWS_REGION
 echo "Lambda function updated successfully!"
 
+

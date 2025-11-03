@@ -16,3 +16,4 @@ aws lambda wait function-updated-v2 --function-name %LAMBDA_FUNCTION_NAME% --reg
 echo Lambda function updated successfully!
 pause
 
+
