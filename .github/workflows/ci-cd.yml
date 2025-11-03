@@ -1,4 +1,4 @@
-name: CI/CD Pipeline to AWS (ECS Only - Seoul)
+name: CI/CD Pipeline to AWS (Hybrid - Lambda + ECS)
 
 on:
   push:
@@ -7,21 +7,15 @@ on:
     branches: [ main ]
 
 env:
-  # --- 1. AWS 리전을 'ap-northeast-2' (서울)로 변경 ---
   AWS_REGION: ap-northeast-2
-
-  # --- 2. ECR 리포지토리 이름 (서울 리전에 생성한 이름과 일치) ---
   ECR_BACKEND_REPOSITORY: chatbot-backend
   ECR_FRONTEND_REPOSITORY: chatbot-frontend
-  
-  # --- 3. ECS (통합) 설정 (서울 리전에 생성한 이름과 일치) ---
+  LAMBDA_FUNCTION_NAME: chatbot-backend-lambda
   ECS_CLUSTER_NAME: chatbot-ec2-cluster
-  ECS_SERVICE_NAME: chatbot-service           # 통합 서비스 이름
-  ECS_TASK_DEFINITION: chatbot-task-definition    # 통합 작업 정의 이름
-  CONTAINER_BACKEND_NAME: backend-container   # 작업 정의 내부의 백엔드 컨테이너 이름
-  CONTAINER_FRONTEND_NAME: frontend-container # 작업 정의 내부의 프론트엔드 컨테이너 이름
-
-# AWS OIDC 인증을 위한 권한
+  ECS_SERVICE_NAME: frontend-service
+  ECS_TASK_DEFINITION: frontend-task-definition
+  CONTAINER_FRONTEND_NAME: frontend-container
+  
 permissions:
   id-token: write
   contents: read
@@ -30,44 +24,33 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.12'
-      - name: Install dependencies
-        run: |
+      - run: |
           cd backend
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: Run tests (if available)
-        run: |
-          cd backend
           echo "Tests placeholder"
 
-  build-and-push: # 프론트엔드와 백엔드 이미지를 모두 빌드
+  build-and-push:
     needs: test
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
     outputs:
-      backend_image_uri: ${{ steps.push-backend.outputs.image_uri }}
-      frontend_image_uri: ${{ steps.push-frontend.outputs.image_uri }}
+      backend_image_uri: ${{ steps.push-backend.outputs.backend_uri }}
+      frontend_image_uri: ${{ steps.push-frontend.outputs.frontend_uri }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Log in to Amazon ECR
+      - uses: aws-actions/amazon-ecr-login@v2
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v3
 
-      # --- 백엔드 이미지 빌드/푸시 (ECS/EC2용) ---
       - name: Build and push backend image
         id: build-backend
         uses: docker/build-push-action@v5
@@ -75,16 +58,13 @@ jobs:
           context: ./backend
           push: true
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_BACKEND_REPOSITORY }}:${{ github.sha }}
-          platforms: linux/amd64 # EC2 인스턴스 아키텍처 명시
-          cache-from: type=gha,scope=backend
-          cache-to: type=gha,mode=max,scope=backend
-      - name: Set backend image URI output
-        id: push-backend
+          provenance: false
+          sbom: false
+      - id: push-backend
         run: |
           IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_BACKEND_REPOSITORY }}:${{ github.sha }}"
           echo "backend_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
 
-      # --- 프론트엔드 이미지 빌드/푸시 (ECS/EC2용) ---
       - name: Build and push frontend image
         id: build-frontend
         uses: docker/build-push-action@v5
@@ -92,63 +72,63 @@ jobs:
           context: ./frontend
           push: true
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_FRONTEND_REPOSITORY }}:${{ github.sha }}
-          platforms: linux/amd64 # EC2 인스턴스 아키텍처 명시
-          cache-from: type=gha,scope=frontend
-          cache-to: type=gha,mode=max,scope=frontend
-      - name: Set frontend image URI output
-        id: push-frontend
+          platforms: linux/amd64
+      - id: push-frontend
         run: |
           IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_FRONTEND_REPOSITORY }}:${{ github.sha }}"
           echo "frontend_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
 
-  deploy-ecs: # 단일 ECS 서비스 배포
-    needs: build-and-push
+  deploy-hybrid:
+    needs: [build-and-push]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # ...existing code...
-      - name: Deploy to Amazon ECS
+      - name: Deploy Backend to Lambda
+        run: |
+          echo "Updating Lambda function ${{ env.LAMBDA_FUNCTION_NAME }} with image ${{ needs.build-and-push.outputs.backend_image_uri }}"
+          aws lambda update-function-code \
+            --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
+            --image-uri ${{ needs.build-and-push.outputs.backend_image_uri }}
+          aws lambda wait function-updated-v2 --function-name ${{ env.LAMBDA_FUNCTION_NAME }}
+          echo "Lambda function update complete!"
+
+      - name: Deploy Frontend to ECS
         id: deploy-ecs
         run: |
-          # 통합 작업 정의 다운로드 (명시적으로 JSON 출력)
-          TASK_DEF_JSON=$(aws ecs describe-task-definition --task-definition $ECS_TASK_DEFINITION --query 'taskDefinition' --output json)
+          echo "Frontend image URI: ${{ needs.build-and-push.outputs.frontend_image_uri }}"
 
-          # 이미지 교체 (원본 문서 전체를 유지하면서 컨테이너 이미지만 업데이트)
-          NEW_TASK_DEF_JSON=$(echo "$TASK_DEF_JSON" | \
-            jq --arg IMAGE_BACKEND "${{ needs.build-and-push.outputs.backend_image_uri }}" \
-               --arg CONTAINER_BACKEND "$CONTAINER_BACKEND_NAME" \
-               --arg IMAGE_FRONTEND "${{ needs.build-and-push.outputs.frontend_image_uri }}" \
-               --arg CONTAINER_FRONTEND "$CONTAINER_FRONTEND_NAME" \
-               '(.containerDefinitions[] | select(.name==$CONTAINER_BACKEND)).image = $IMAGE_BACKEND |
-                (.containerDefinitions[] | select(.name==$CONTAINER_FRONTEND)).image = $IMAGE_FRONTEND')
+          TASK_DEF_JSON=$(aws ecs describe-task-definition \
+            --task-definition $ECS_TASK_DEFINITION \
+            --query taskDefinition \
+            --output json)
 
-          # 필요한 키만 추출하고 null인 배열은 빈 배열로, taskRoleArn은 존재할 때만 포함
-          NEW_TASK_DEF_INPUT=$(echo "$NEW_TASK_DEF_JSON" | jq -c '{
+          NEW_TASK_DEF_INPUT=$(jq \
+            --arg IMAGE_FRONTEND "${{ needs.build-and-push.outputs.frontend_image_uri }}" \
+            --arg CONTAINER_FRONTEND "$CONTAINER_FRONTEND_NAME" \
+            '
+            ( .containerDefinitions[] | select(.name == $CONTAINER_FRONTEND) ).image = $IMAGE_FRONTEND |
+            {
               family: .family,
+              taskRoleArn: (if .taskRoleArn == null then empty else .taskRoleArn end),
               executionRoleArn: .executionRoleArn,
               networkMode: .networkMode,
               containerDefinitions: .containerDefinitions,
-              volumes: (.volumes // []),
-              placementConstraints: (.placementConstraints // []),
-              requiresCompatibilities: (.requiresCompatibilities // [])
-            } + ( if .taskRoleArn then { taskRoleArn: .taskRoleArn } else {} end )')
+              volumes: (if .volumes == null then [] else .volumes end),
+              placementConstraints: (if .placementConstraints == null then [] else .placementConstraints end),
+              requiresCompatibilities: (if .requiresCompatibilities == null then [] else .requiresCompatibilities end)
+            }' <<< "$TASK_DEF_JSON"
+          )
 
-          # (디버깅) 생성된 JSON 확인: uncomment 하면 로그에 출력됨
-          # echo "$NEW_TASK_DEF_INPUT" | jq .
-
-          # 새 작업 정의 등록
           NEW_TASK_DEF_REGISTER=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEF_INPUT")
-          NEW_REVISION_ARN=$(echo "$NEW_TASK_DEF_REGISTER" | jq -r '.taskDefinition.taskDefinitionArn')
+          NEW_REVISION_ARN=$(echo $NEW_TASK_DEF_REGISTER | jq -r '.taskDefinition.taskDefinitionArn')
           echo "task_definition_arn=$NEW_REVISION_ARN" >> $GITHUB_OUTPUT
-          
+
       - name: Update ECS Service
         run: |
           NEW_REVISION_ARN="${{ steps.deploy-ecs.outputs.task_definition_arn }}"
