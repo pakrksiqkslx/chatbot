@@ -7,6 +7,8 @@ import logging
 from config import settings
 from direct_pinecone_service import get_vectorstore_service
 from hyperclova_client import get_hyperclova_client
+from database import db_instance
+from routers import auth
 
 # 로깅 설정
 logging.basicConfig(
@@ -60,6 +62,16 @@ else:
     )
 
 router = APIRouter(prefix=settings.API_PREFIX)
+
+# 라우터 등록
+app.include_router(auth.router, prefix=settings.API_PREFIX)
+
+# MongoDB 연결 이벤트
+@app.on_event("startup")
+async def startup_db_client():
+    """앱 시작 시 MongoDB 연결"""
+    await db_instance.connect_db()
+    logger.info("MongoDB Atlas 연결 완료")
 
 
 @router.get("/")
