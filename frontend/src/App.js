@@ -9,6 +9,7 @@ import Sidebar from './components/Sidebar/Sidebar';
 import RightToolbar from './components/RightToolbar/RightToolbar';
 import Footer from './components/Footer/Footer';
 import StudyPlan from './components/StudyPlan/StudyPlan';
+import { LoadingOverlay } from './components/LoadingSpinner/LoadingSpinner';
 
 
 // 고유한 메시지 ID 생성 함수
@@ -36,13 +37,27 @@ function MainApp() {
   const [pendingSession, setPendingSession] = useState(null);
   const [user, setUser] = useState(null);
   const [currentPage, setCurrentPage] = useState('chat'); // 페이지 상태 추가
+  const [isLoading, setIsLoading] = useState(false); // 로딩 상태 추가
+  const [loadingMessage, setLoadingMessage] = useState(''); // 로딩 메시지
 
   React.useEffect(() => {
     currentSessionIdxRef.current = currentSessionIdx;
   }, [currentSessionIdx]);
 
   async function callChatAPI(userMessage) {
+    setIsLoading(true);
+    setLoadingMessage('질문을 분석하고 있습니다...');
+    
     try {
+      // 단계별 로딩 메시지
+      setTimeout(() => {
+        setLoadingMessage('관련 정보를 검색하고 있습니다...');
+      }, 1000);
+      
+      setTimeout(() => {
+        setLoadingMessage('AI가 답변을 생성하고 있습니다...');
+      }, 2000);
+      
       const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
       const response = await fetch(`${apiUrl}/chat`, {
         method: 'POST',
@@ -65,6 +80,9 @@ function MainApp() {
     } catch (error) {
       console.error('백엔드 API 호출 오류:', error);
       return `죄송합니다. 서버와 통신 중 오류가 발생했습니다: ${error.message}`;
+    } finally {
+      setIsLoading(false);
+      setLoadingMessage('');
     }
   }
 
@@ -164,6 +182,11 @@ function MainApp() {
           currentPage={currentPage}
           onPageChange={setCurrentPage}
         />
+        
+        {/* 로딩 오버레이 */}
+        {isLoading && (
+          <LoadingOverlay message={loadingMessage} />
+        )}
       </div>
     );
   }
@@ -200,6 +223,11 @@ function MainApp() {
         currentPage={currentPage}
         onPageChange={setCurrentPage}
       />
+      
+      {/* 로딩 오버레이 */}
+      {isLoading && (
+        <LoadingOverlay message={loadingMessage} />
+      )}
     </div>
   );
 }

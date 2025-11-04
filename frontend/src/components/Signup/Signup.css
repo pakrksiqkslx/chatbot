@@ -54,6 +54,108 @@
   cursor: pointer;
   margin-top: 8px;
 }
+/* 이메일 입력 그룹 스타일 */
+.email-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.email-container {
+  display: flex;
+  align-items: center;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.email-prefix {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  font-size: 15px;
+  outline: none;
+}
+
+.email-prefix:disabled {
+  background-color: #f5f5f5;
+  color: #666;
+}
+
+.email-suffix {
+  padding: 12px;
+  background-color: #f8f9fa;
+  color: #666;
+  font-size: 15px;
+  border-left: 1px solid #e0e0e0;
+  white-space: nowrap;
+}
+
+.verify-btn {
+  background: #4caf50 !important;
+  color: white;
+  border: none;
+  padding: 8px 16px !important;
+  border-radius: 6px;
+  font-size: 14px !important;
+  cursor: pointer;
+  margin-top: 0 !important;
+}
+
+.verify-btn:disabled {
+  background: #cccccc !important;
+  cursor: not-allowed;
+}
+
+.verified-badge {
+  color: #4caf50;
+  font-weight: 600;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 인증번호 입력 그룹 */
+.verification-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.verification-input {
+  flex: 1;
+  padding: 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 15px;
+  text-align: center;
+  letter-spacing: 2px;
+}
+
+.verify-code-btn {
+  background: #ff9800 !important;
+  color: white;
+  border: none;
+  padding: 12px 16px !important;
+  border-radius: 8px;
+  font-size: 14px !important;
+  cursor: pointer;
+  white-space: nowrap;
+  margin-top: 0 !important;
+}
+
+.verify-code-btn:disabled {
+  background: #cccccc !important;
+  cursor: not-allowed;
+}
+
+/* 기존 스타일과 통합 */
+.signup-form button[type="submit"]:disabled {
+  background: #cccccc !important;
+  cursor: not-allowed;
+}
+
 .signup-error {
   color: #d32f2f;
   font-size: 13px;
