@@ -41,6 +41,11 @@ class Settings:
     # API 경로 프리픽스 및 프록시 루트 경로
     API_PREFIX: str = os.getenv("API_PREFIX", "/api")
     ROOT_PATH: str = os.getenv("ROOT_PATH", "")
+    # 문서화(Swagger / ReDoc) 설정
+    ENABLE_DOCS: bool = os.getenv("ENABLE_DOCS", "true").lower() == "true"
+    OPENAPI_URL: str = os.getenv("OPENAPI_URL", "/openapi.json")
+    DOCS_URL: str = os.getenv("DOCS_URL", "/docs")
+    REDOC_URL: str = os.getenv("REDOC_URL", "/redoc")
     # 원격 주입 제거(ECS는 Task env/Secrets 사용)
     
     # 서버 설정

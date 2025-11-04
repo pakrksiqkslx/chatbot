@@ -1,19 +1,18 @@
 """
-HyperCLOVA X API 클라이언트
+HyperCLOVA X API 클라이언트 (비동기 버전)
 """
-import requests
+import httpx
 import json
 import logging
+import asyncio
 from typing import List, Dict, Any, Optional
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 from config import settings
 
 logger = logging.getLogger(__name__)
 
 
 class HyperCLOVAClient:
-    """HyperCLOVA X API 클라이언트"""
+    """HyperCLOVA X API 클라이언트 (비동기)"""
     
     # HyperCLOVA X Chat Completions API 엔드포인트
     # v3 API 사용, HCX-005 모델
@@ -39,21 +38,27 @@ class HyperCLOVAClient:
         if not self.api_key:
             raise ValueError("HyperCLOVA API 키가 설정되지 않았습니다")
         
-        # 재시도 로직이 있는 세션 생성
-        self.session = self._get_session_with_retry()
+        # 비동기 클라이언트는 메서드 호출 시 생성 (연결 풀 공유)
+        self._client: Optional[httpx.AsyncClient] = None
     
-    def _get_session_with_retry(self):
-        """재시도 로직이 있는 세션"""
-        session = requests.Session()
-        retry = Retry(
-            total=3,
-            backoff_factor=0.5,
-            status_forcelist=[408, 429, 500, 502, 503, 504]
-        )
-        adapter = HTTPAdapter(max_retries=retry)
-        session.mount("http://", adapter)
-        session.mount("https://", adapter)
-        return session
+    async def _get_client(self) -> httpx.AsyncClient:
+        """비동기 HTTP 클라이언트 반환 (재사용)"""
+        if self._client is None:
+            # 재시도 로직과 타임아웃 설정
+            timeout = httpx.Timeout(30.0, connect=10.0)
+            limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
+            
+            self._client = httpx.AsyncClient(
+                timeout=timeout,
+                limits=limits
+            )
+        return self._client
+    
+    async def _close_client(self):
+        """클라이언트 종료"""
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
     
     def _build_headers(self) -> Dict[str, str]:
         """API 요청 헤더 생성 (HyperCLOVA X v3 표준 형식)"""
@@ -89,7 +94,7 @@ class HyperCLOVAClient:
             })
         return converted
     
-    def chat(
+    async def chat(
         self,
         messages: List[Dict[str, str]],
         max_tokens: int = 500,
@@ -102,7 +107,7 @@ class HyperCLOVAClient:
         include_ai_filters: bool = True
     ) -> Dict[str, Any]:
         """
-        HyperCLOVA X v3 Chat Completions API 호출
+        HyperCLOVA X v3 Chat Completions API 호출 (비동기)
         
         Args:
             messages: 대화 메시지 리스트 [{"role": "system|user|assistant", "content": "..."}]
@@ -118,54 +123,85 @@ class HyperCLOVAClient:
         Returns:
             API 응답 딕셔너리
         """
-        try:
-            headers = self._build_headers()
-            
-            # v3 API 형식으로 메시지 변환
-            v3_messages = self._convert_messages_to_v3_format(messages)
-            
-            # HyperCLOVA X v3 API 형식
-            payload = {
-                "messages": v3_messages,
-                "topP": top_p,
-                "topK": top_k,
-                "maxTokens": max_tokens,
-                "temperature": temperature,
-                "repetitionPenalty": repetition_penalty,
-                "stop": stop if stop else [],
-                "seed": seed,
-                "includeAiFilters": include_ai_filters
-            }
-            
-            url = self.HOST + self.API_ENDPOINT
-            
-            logger.info(f"HyperCLOVA X v3 API 호출 중... (메시지 수: {len(messages)})")
-            logger.debug(f"URL: {url}")
-            logger.debug(f"요청 헤더: {headers}")
-            
-            response = self.session.post(
-                url,
-                headers=headers,
-                json=payload,
-                timeout=30
-            )
-            
-            response.raise_for_status()
-            result = response.json()
-            
-            logger.info("HyperCLOVA X API 호출 성공")
-            return result
-            
-        except requests.exceptions.RequestException as e:
-            logger.error(f"HyperCLOVA X API 호출 실패: {e}")
-            if hasattr(e, 'response') and e.response is not None:
-                logger.error(f"응답 상태 코드: {e.response.status_code}")
-                logger.error(f"응답 내용: {e.response.text}")
-            raise
+        max_retries = 3
+        backoff_factor = 0.5
+        
+        for attempt in range(max_retries):
+            try:
+                client = await self._get_client()
+                headers = self._build_headers()
+                
+                # v3 API 형식으로 메시지 변환
+                v3_messages = self._convert_messages_to_v3_format(messages)
+                
+                # HyperCLOVA X v3 API 형식
+                payload = {
+                    "messages": v3_messages,
+                    "topP": top_p,
+                    "topK": top_k,
+                    "maxTokens": max_tokens,
+                    "temperature": temperature,
+                    "repetitionPenalty": repetition_penalty,
+                    "stop": stop if stop else [],
+                    "seed": seed,
+                    "includeAiFilters": include_ai_filters
+                }
+                
+                url = self.HOST + self.API_ENDPOINT
+                
+                logger.info(f"HyperCLOVA X v3 API 호출 중... (메시지 수: {len(messages)}, 시도: {attempt + 1})")
+                logger.debug(f"URL: {url}")
+                logger.debug(f"요청 헤더: {headers}")
+                
+                response = await client.post(
+                    url,
+                    headers=headers,
+                    json=payload
+                )
+                
+                response.raise_for_status()
+                result = response.json()
+                
+                logger.info("HyperCLOVA X API 호출 성공")
+                return result
+                
+            except httpx.HTTPStatusError as e:
+                status_code = e.response.status_code
+                logger.error(f"HyperCLOVA X API 호출 실패 (HTTP {status_code}): {e}")
+                
+                # 재시도 가능한 상태 코드
+                if status_code in [408, 429, 500, 502, 503, 504] and attempt < max_retries - 1:
+                    wait_time = backoff_factor * (2 ** attempt)
+                    logger.info(f"{wait_time}초 후 재시도...")
+                    await asyncio.sleep(wait_time)
+                    continue
+                
+                # 재시도 불가능하거나 마지막 시도
+                if hasattr(e, 'response') and e.response is not None:
+                    logger.error(f"응답 내용: {e.response.text}")
+                raise
+                
+            except httpx.RequestError as e:
+                logger.error(f"HyperCLOVA X API 네트워크 오류: {e}")
+                
+                # 네트워크 오류는 재시도
+                if attempt < max_retries - 1:
+                    wait_time = backoff_factor * (2 ** attempt)
+                    logger.info(f"{wait_time}초 후 재시도...")
+                    await asyncio.sleep(wait_time)
+                    continue
+                raise
+                
+            except Exception as e:
+                logger.error(f"HyperCLOVA X API 예상치 못한 오류: {e}")
+                raise
+        
+        # 모든 재시도 실패
+        raise Exception("HyperCLOVA X API 호출이 최대 재시도 횟수를 초과했습니다")
     
-    def classify_intent(self, query: str) -> str:
+    async def classify_intent(self, query: str) -> str:
         """
-        사용자 질문의 의도 분류 (단순화)
+        사용자 질문의 의도 분류 (비동기)
         
         Args:
             query: 사용자 질문
@@ -174,18 +210,18 @@ class HyperCLOVAClient:
             'course_related' 또는 'casual_chat'
         """
         system_prompt = """당신은 사용자 질문을 분류하는 AI입니다.
-사용자의 질문을 다음 2가지로만 분류해주세요:
+                        사용자의 질문을 다음 2가지로만 분류해주세요:
 
-1. course_related: 수업계획서와 관련된 모든 질문
-   예시: "임석구 교수님", "임석구 교수님 연락처", "C언어프로그래밍 교수님", 
-         "데이터베이스 과제", "웹프로그래밍 수업시간", "캡스톤디자인 수업계획"
+                        1. course_related: 수업계획서와 관련된 모든 질문
+                        예시: "임석구 교수님", "임석구 교수님 연락처", "C언어프로그래밍 교수님", 
+                                "데이터베이스 과제", "웹프로그래밍 수업시간", "캡스톤디자인 수업계획"
 
-2. casual_chat: 일상 대화
-   예시: "안녕", "고마워", "날씨", "시간", "뭐해?"
+                        2. casual_chat: 일상 대화
+                        예시: "안녕", "고마워", "날씨", "시간", "뭐해?"
 
-답변은 반드시 다음 중 하나만 출력하세요:
-- course_related (수업계획서 관련)
-- casual_chat (일상 대화)"""
+                        답변은 반드시 다음 중 하나만 출력하세요:
+                        - course_related (수업계획서 관련)
+                        - casual_chat (일상 대화)"""
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -193,7 +229,7 @@ class HyperCLOVAClient:
         ]
         
         try:
-            response = self.chat(messages=messages, max_tokens=10, temperature=0.1)
+            response = await self.chat(messages=messages, max_tokens=10, temperature=0.1)
             
             # 응답 추출
             if "result" in response and "message" in response["result"]:
@@ -225,14 +261,14 @@ class HyperCLOVAClient:
             # 오류 시 안전하게 수업 관련으로 처리
             return 'course_related'
     
-    def generate_answer(
+    async def generate_answer(
         self,
         query: str,
         context_docs: List[Dict[str, Any]],
         system_prompt: str = None
     ) -> str:
         """
-        컨텍스트 기반 답변 생성
+        컨텍스트 기반 답변 생성 (비동기)
         
         Args:
             query: 사용자 질문
@@ -242,30 +278,24 @@ class HyperCLOVAClient:
         Returns:
             생성된 답변 텍스트
         """
-        # ⚠️ 임시: Mock 응답 사용 (API 키 문제 해결 전까지)
-        # TODO: 새로운 CLOVA Studio API 키 발급 후 아래 if 문 제거
-        if False:  # Mock 사용 안 함 - 실제 HyperCLOVA X API 호출
-            logger.info("Mock 응답 생성 중 (API 키 문제로 임시 사용)")
-            return self._generate_mock_answer(query, context_docs)
-        
         # 기본 시스템 프롬프트 (개선된 버전)
         if system_prompt is None:
             system_prompt = """당신은 대학교 수업계획서 기반 챗봇입니다.
-제공된 수업계획서 정보를 바탕으로 학생들의 질문에 정확하고 도움이 되는 답변을 제공하세요.
+                            제공된 수업계획서 정보를 바탕으로 학생들의 질문에 정확하고 도움이 되는 답변을 제공하세요.
 
-답변 원칙:
-1. 제공된 수업계획서 정보만을 바탕으로 답변
-2. 질문의 의도를 정확히 파악하여 적절한 형태로 답변
-3. 교수님 이름만 물어보면 해당 교수님의 모든 수업 목록을 보여주기
-4. 연락처를 물어보면 교수님의 연락처 정보를 제공하기
-5. 구체적인 수업을 물어보면 해당 수업의 상세 정보를 제공하기
-6. 친근하고 도움이 되는 톤으로 답변
-7. 정보가 부족하면 솔직하게 말하기
+                            답변 원칙:
+                            1. 제공된 수업계획서 정보만을 바탕으로 답변
+                            2. 질문의 의도를 정확히 파악하여 적절한 형태로 답변
+                            3. 교수님 이름만 물어보면 해당 교수님의 모든 수업 목록을 보여주기
+                            4. 연락처를 물어보면 교수님의 연락처 정보를 제공하기
+                            5. 구체적인 수업을 물어보면 해당 수업의 상세 정보를 제공하기
+                            6. 친근하고 도움이 되는 톤으로 답변
+                            7. 정보가 부족하면 솔직하게 말하기
 
-답변 형태 예시:
-- 교수님 이름만 물어본 경우: "○○ 교수님의 수업은 다음과 같습니다: 1. 강의A 2. 강의B ..."
-- 연락처를 물어본 경우: "○○ 교수님의 연락처는 010-xxxx-xxxx입니다."
-- 구체적 수업을 물어본 경우: 해당 수업의 상세 정보 제공"""
+                            답변 형태 예시:
+                            - 교수님 이름만 물어본 경우: "○○ 교수님의 수업은 다음과 같습니다: 1. 강의A 2. 강의B ..."
+                            - 연락처를 물어본 경우: "○○ 교수님의 연락처는 010-xxxx-xxxx입니다."
+                            - 구체적 수업을 물어본 경우: 해당 수업의 상세 정보 제공"""
 
         # 컨텍스트 구성
         context_text = "\n\n".join([
@@ -286,7 +316,7 @@ class HyperCLOVAClient:
         ]
         
         # API 호출
-        response = self.chat(
+        response = await self.chat(
             messages=messages,
             max_tokens=500,
             temperature=0.5,
@@ -327,9 +357,9 @@ class HyperCLOVAClient:
             logger.error(f"전체 응답: {json.dumps(response, ensure_ascii=False, indent=2)}")
             raise
     
-    def generate_casual_answer(self, query: str) -> str:
+    async def generate_casual_answer(self, query: str) -> str:
         """
-        일상 대화 답변 생성 (컨텍스트 없이)
+        일상 대화 답변 생성 (컨텍스트 없이, 비동기)
         
         Args:
             query: 사용자 질문
@@ -338,12 +368,12 @@ class HyperCLOVAClient:
             생성된 답변 텍스트
         """
         system_prompt = """당신은 친근하고 도움이 되는 대학교 수업 안내 챗봇입니다.
-학생들과 자연스럽게 대화하며, 필요한 경우 수업계획서 관련 질문을 하도록 안내해주세요.
+                        학생들과 자연스럽게 대화하며, 필요한 경우 수업계획서 관련 질문을 하도록 안내해주세요.
 
-답변 원칙:
-1. 친근하고 자연스러운 한국어로 답변
-2. 간단명료하게 답변
-3. 수업 관련 질문이 있다면 구체적으로 물어보도록 유도"""
+                        답변 원칙:
+                        1. 친근하고 자연스러운 한국어로 답변
+                        2. 간단명료하게 답변
+                        3. 수업 관련 질문이 있다면 구체적으로 물어보도록 유도"""
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -351,7 +381,7 @@ class HyperCLOVAClient:
         ]
         
         try:
-            response = self.chat(
+            response = await self.chat(
                 messages=messages,
                 max_tokens=200,
                 temperature=0.7,
