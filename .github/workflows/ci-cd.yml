@@ -25,14 +25,49 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      
       - uses: actions/setup-python@v4
         with:
           python-version: '3.12'
-      - run: |
+      
+      - name: Install dependencies
+        run: |
           cd backend
           pip install --upgrade pip
           pip install -r requirements.txt
-          echo "✅ Backend test passed (placeholder)"
+      
+      - name: Run tests
+        run: |
+          cd backend
+          export ENVIRONMENT=test
+          export LOG_LEVEL=INFO
+          export DEBUG=false
+          export API_PREFIX=/api
+          export ROOT_PATH=""
+          export ENABLE_DOCS=true
+          export OPENAPI_URL=/openapi.json
+          export DOCS_URL=/docs
+          export REDOC_URL=/redoc
+          export HOST=0.0.0.0
+          export PORT=5000
+          export BACKEND_WORKERS=1
+          export JWT_SECRET_KEY=test-secret-key
+          export SECRET_KEY=test-secret-key
+          export ALLOWED_ORIGINS=http://localhost:3000
+          export ALLOW_ALL_ORIGINS_IN_DEV=false
+          export ENABLE_METRICS=true
+          export ENABLE_HEALTH_CHECK=true
+          export HYPERCLOVA_API_KEY=""
+          export PINECONE_API_KEY=""
+          export PINECONE_INDEX_NAME="test-index"
+          
+          pytest test_main.py -v --tb=short || python test_main.py
+      
+      - name: Test import validation
+        run: |
+          cd backend
+          python -c "from config import settings; print(f'✅ Config loaded: {settings.APP_NAME}')"
+          python -c "from main import app; print(f'✅ App created: {app.title}')"
 
   build-and-push:
     needs: test
@@ -97,20 +132,39 @@ jobs:
 
       - name: Update ECS Task Definition (Both Containers)
         id: update-task
+        env:
+          IMAGE_FRONTEND: ${{ needs.build-and-push.outputs.frontend_image_uri }}
+          IMAGE_BACKEND: ${{ needs.build-and-push.outputs.backend_image_uri }}
+          CONTAINER_FRONTEND: ${{ env.CONTAINER_FRONTEND_NAME }}
+          CONTAINER_BACKEND: ${{ env.CONTAINER_BACKEND_NAME }}
         run: |
-          echo "Frontend image URI: ${{ needs.build-and-push.outputs.frontend_image_uri }}"
-          echo "Backend image URI: ${{ needs.build-and-push.outputs.backend_image_uri }}"
+          echo "Frontend image URI: $IMAGE_FRONTEND"
+          echo "Backend image URI: $IMAGE_BACKEND"
+          echo "Frontend container: $CONTAINER_FRONTEND"
+          echo "Backend container: $CONTAINER_BACKEND"
+          echo "Task definition: ${{ env.ECS_TASK_DEFINITION }}"
 
+          # Task Definition 조회
+          echo "Fetching task definition..."
           TASK_DEF_JSON=$(aws ecs describe-task-definition \
-            --task-definition $ECS_TASK_DEFINITION \
+            --task-definition ${{ env.ECS_TASK_DEFINITION }} \
             --query taskDefinition \
             --output json)
 
-          NEW_TASK_DEF=$(jq \
-            --arg IMAGE_FRONTEND "${{ needs.build-and-push.outputs.frontend_image_uri }}" \
-            --arg IMAGE_BACKEND "${{ needs.build-and-push.outputs.backend_image_uri }}" \
-            --arg CONTAINER_FRONTEND "$CONTAINER_FRONTEND_NAME" \
-            --arg CONTAINER_BACKEND "$CONTAINER_BACKEND_NAME" \
+          if [ -z "$TASK_DEF_JSON" ]; then
+            echo "Error: Failed to fetch task definition"
+            exit 1
+          fi
+
+          echo "Task definition fetched successfully"
+          echo "Updating container images..."
+
+          # jq를 사용하여 이미지 URI 업데이트
+          NEW_TASK_DEF=$(echo "$TASK_DEF_JSON" | jq \
+            --arg IMAGE_FRONTEND "$IMAGE_FRONTEND" \
+            --arg IMAGE_BACKEND "$IMAGE_BACKEND" \
+            --arg CONTAINER_FRONTEND "$CONTAINER_FRONTEND" \
+            --arg CONTAINER_BACKEND "$CONTAINER_BACKEND" \
             '
             (.containerDefinitions[] | select(.name == $CONTAINER_FRONTEND)).image = $IMAGE_FRONTEND |
             (.containerDefinitions[] | select(.name == $CONTAINER_BACKEND)).image = $IMAGE_BACKEND |
@@ -123,10 +177,39 @@ jobs:
               volumes: (if .volumes == null then [] else .volumes end),
               placementConstraints: (if .placementConstraints == null then [] else .placementConstraints end),
               requiresCompatibilities: (if .requiresCompatibilities == null then [] else .requiresCompatibilities end)
-            }' <<< "$TASK_DEF_JSON")
+            }')
 
-          NEW_REGISTER=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEF")
-          NEW_REVISION_ARN=$(echo $NEW_REGISTER | jq -r '.taskDefinition.taskDefinitionArn')
+          # JSON 유효성 검사
+          if ! echo "$NEW_TASK_DEF" | jq empty 2>/dev/null; then
+            echo "Error: Invalid JSON generated"
+            echo "Generated JSON:"
+            echo "$NEW_TASK_DEF"
+            exit 1
+          fi
+
+          echo "Task definition JSON updated successfully"
+          
+          # 파일로 저장하여 디버깅 (필요시)
+          echo "$NEW_TASK_DEF" > /tmp/new-task-definition.json
+
+          # Task Definition 등록
+          echo "Registering new task definition..."
+          NEW_REGISTER=$(aws ecs register-task-definition --cli-input-json file:///tmp/new-task-definition.json)
+          
+          if [ $? -ne 0 ]; then
+            echo "Error: Failed to register task definition"
+            exit 1
+          fi
+
+          NEW_REVISION_ARN=$(echo "$NEW_REGISTER" | jq -r '.taskDefinition.taskDefinitionArn')
+          
+          if [ -z "$NEW_REVISION_ARN" ] || [ "$NEW_REVISION_ARN" = "null" ]; then
+            echo "Error: Failed to get task definition ARN"
+            echo "Response: $NEW_REGISTER"
+            exit 1
+          fi
+
+          echo "New task definition ARN: $NEW_REVISION_ARN"
           echo "task_definition_arn=$NEW_REVISION_ARN" >> $GITHUB_OUTPUT
 
       - name: Update ECS Service
