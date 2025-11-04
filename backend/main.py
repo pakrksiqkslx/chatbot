@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, APIRouter
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel
@@ -7,7 +8,6 @@ import logging
 from config import settings
 from direct_pinecone_service import get_vectorstore_service
 from hyperclova_client import get_hyperclova_client
-from mangum import Mangum
 
 # 로깅 설정
 logging.basicConfig(
@@ -21,27 +21,50 @@ app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     debug=settings.DEBUG,
-    docs_url="/docs" if settings.ENVIRONMENT != "production" else None,
-    redoc_url="/redoc" if settings.ENVIRONMENT != "production" else None,
+    root_path=settings.ROOT_PATH,
+    openapi_url=(f"{settings.API_PREFIX}{settings.OPENAPI_URL}" if settings.ENABLE_DOCS else None),
+    docs_url=(f"{settings.API_PREFIX}{settings.DOCS_URL}" if settings.ENABLE_DOCS else None),
+    redoc_url=(f"{settings.API_PREFIX}{settings.REDOC_URL}" if settings.ENABLE_DOCS else None),
 )
 
 # 보안 미들웨어 설정
 if settings.ENVIRONMENT == "production":
+    # 기본 허용 호스트(프로덕션 도메인)
+    allowed_hosts = ["*.bu-chatbot.co.kr"]
+
+    # 내부 테스트/헬스체크 용도로 로컬호스트를 허용하려면
+    # 환경변수 ALLOW_LOCALHOST_IN_PROD=true 로 켜십시오.
+    import os
+    if os.getenv("ALLOW_LOCALHOST_IN_PROD", "false").lower() in ("1", "true", "yes"):
+        allowed_hosts += ["localhost", "127.0.0.1"]
+
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=["localhost", "127.0.0.1", "*.yourdomain.com"]
+        allowed_hosts=allowed_hosts
     )
 
 # CORS middleware 설정
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
-)
+if settings.ALLOWED_ORIGINS == ["*"]:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.ALLOWED_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["*"],
+    )
 
-@app.get("/")
+router = APIRouter(prefix=settings.API_PREFIX)
+
+
+@router.get("/")
 async def root():
     """루트 엔드포인트"""
     return {
@@ -50,16 +73,73 @@ async def root():
         "environment": settings.ENVIRONMENT
     }
 
-@app.get("/health")
+@router.get("/health")
 async def health_check():
-    """헬스 체크 엔드포인트"""
-    return {
+    """헬스 체크 엔드포인트 - 실제 의존성 연결 상태 확인"""
+    health_status = {
         "status": "healthy",
         "environment": settings.ENVIRONMENT,
-        "version": settings.APP_VERSION
+        "version": settings.APP_VERSION,
+        "checks": {}
     }
+    
+    # Pinecone 연결 상태 확인
+    pinecone_status = "unknown"
+    try:
+        vectorstore = get_vectorstore_service()
+        if vectorstore and vectorstore.index:
+            # 간단한 연결 테스트 (인덱스 정보 확인)
+            # 실제 쿼리는 하지 않고 클라이언트만 확인
+            pinecone_status = "healthy"
+            health_status["checks"]["pinecone"] = {
+                "status": "healthy",
+                "index_name": settings.PINECONE_INDEX_NAME
+            }
+        else:
+            pinecone_status = "unhealthy"
+            health_status["checks"]["pinecone"] = {
+                "status": "unhealthy",
+                "error": "Pinecone index not initialized"
+            }
+    except Exception as e:
+        pinecone_status = "unhealthy"
+        health_status["checks"]["pinecone"] = {
+            "status": "unhealthy",
+            "error": str(e)
+        }
+        logger.warning(f"Pinecone health check failed: {e}")
+    
+    hyperclova_status = "unknown"
+    try:
+        if settings.HYPERCLOVA_API_KEY:
+            hyperclova_status = "healthy"
+            health_status["checks"]["hyperclova"] = {
+                "status": "healthy",
+                "api_key_configured": True
+            }
+        else:
+            hyperclova_status = "unhealthy"
+            health_status["checks"]["hyperclova"] = {
+                "status": "unhealthy",
+                "error": "HyperCLOVA API key not configured"
+            }
+    except Exception as e:
+        hyperclova_status = "unhealthy"
+        health_status["checks"]["hyperclova"] = {
+            "status": "unhealthy",
+            "error": str(e)
+        }
+        logger.warning(f"HyperCLOVA health check failed: {e}")
+    
+    # 전체 상태 결정 (하나라도 unhealthy면 unhealthy)
+    if pinecone_status == "unhealthy" or hyperclova_status == "unhealthy":
+        health_status["status"] = "unhealthy"
+        # HTTP 503 반환 (로드 밸런서가 헬스 체크 실패로 인식)
+        return JSONResponse(status_code=503, content=health_status)
+    
+    return health_status
 
-@app.get("/metrics")
+@router.get("/metrics")
 async def metrics():
     """메트릭 엔드포인트 (프로덕션에서는 Prometheus 등 사용)"""
     if not settings.ENABLE_METRICS:
@@ -86,7 +166,7 @@ class ChatResponse(BaseModel):
     sources: list = []
 
 
-@app.post("/chat", response_model=ChatResponse)
+@router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """
     수업계획서 기반 챗봇 엔드포인트
@@ -101,25 +181,25 @@ async def chat(request: ChatRequest):
         # HyperCLOVA 클라이언트 초기화
         hyperclova = get_hyperclova_client()
         
-        # 1. 질문 의도 분류
-        intent = hyperclova.classify_intent(request.query)
+        # 1. 질문 의도 분류 (비동기)
+        intent = await hyperclova.classify_intent(request.query)
         logger.info(f"질문 의도: {intent}")
         
-        # 2. 일상 대화인 경우 바로 답변
+        # 2. 일상 대화인 경우 바로 답변 (비동기)
         if intent == 'casual_chat':
             logger.info("일상 대화로 분류 - 직접 답변 생성")
-            answer = hyperclova.generate_casual_answer(request.query)
+            answer = await hyperclova.generate_casual_answer(request.query)
             
             return ChatResponse(
                 answer=answer,
                 sources=[]
             )
         
-        # 3. PINECONE 벡터 검색 (교수님 목록 요청 또는 수업 관련 질문)
+        # 3. PINECONE 벡터 검색 (비동기)
         logger.info(f"{intent} 분류 - 벡터 검색 수행")
         
         vectorstore = get_vectorstore_service()
-        search_results = vectorstore.similarity_search(
+        search_results = await vectorstore.similarity_search(
             query=request.query,
             k=request.k
         )
@@ -132,8 +212,8 @@ async def chat(request: ChatRequest):
         
         logger.info(f"검색된 문서 수: {len(search_results)}")
         
-        # 4. HyperCLOVA가 직접 질문을 이해하고 답변 생성
-        answer = hyperclova.generate_answer(
+        # 4. HyperCLOVA가 직접 질문을 이해하고 답변 생성 (비동기)
+        answer = await hyperclova.generate_answer(
             query=request.query,
             context_docs=search_results
         )
@@ -163,8 +243,7 @@ async def chat(request: ChatRequest):
             detail="서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
         )
 
-# Lambda 핸들러 생성
-lambda_handler = Mangum(app)
+app.include_router(router)
 
 if __name__ == "__main__":
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
