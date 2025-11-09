@@ -15,6 +15,15 @@ env:
   ECS_TASK_DEFINITION: chatbot-task-definition
   CONTAINER_BACKEND_NAME: backend-container
   CONTAINER_FRONTEND_NAME: frontend-container
+  # SSM Parameter Store paths (non-sensitive)
+  SSM_REACT_APP_API_URL: /prod/REACT_APP_API_URL
+  SSM_HYPERCLOVA_API_KEY: /prod/HYPERCLOVA_API_KEY
+  SSM_PINECONE_API_KEY: /prod/PINECONE_API_KEY
+  SSM_PINECONE_INDEX_NAME: /prod/PINECONE_INDEX_NAME
+  SSM_MONGODB_URI: /prod/MONGODB_URI
+  SSM_MONGODB_DATABASE: /prod/MONGODB_DATABASE
+  SSM_JWT_SECRET_KEY: /prod/JWT_SECRET_KEY
+  SSM_JWT_ACCESS_TOKEN_EXPIRE_MINUTES: /prod/JWT_ACCESS_TOKEN_EXPIRE_MINUTES
 
 permissions:
   id-token: write
@@ -144,7 +153,7 @@ jobs:
           echo "Backend container: $CONTAINER_BACKEND"
           echo "Task definition: ${{ env.ECS_TASK_DEFINITION }}"
 
-          PARAMETERS=(
+          PARAM_KEYS=(
             "REACT_APP_API_URL"
             "HYPERCLOVA_API_KEY"
             "PINECONE_API_KEY"
@@ -155,27 +164,33 @@ jobs:
             "JWT_ACCESS_TOKEN_EXPIRE_MINUTES"
           )
 
-          for PARAM_NAME in "${PARAMETERS[@]}"; do
-            echo "Fetching ${PARAM_NAME} from SSM Parameter Store..."
+          for PARAM_KEY in "${PARAM_KEYS[@]}"; do
+            ENV_VAR_NAME="SSM_${PARAM_KEY}"
+            PARAMETER_NAME=$(printenv "${ENV_VAR_NAME}")
+            if [ -z "$PARAMETER_NAME" ]; then
+              PARAMETER_NAME="$PARAM_KEY"
+            fi
+
+            echo "Fetching ${PARAM_KEY} from SSM Parameter Store (parameter: ${PARAMETER_NAME})..."
             PARAM_VALUE=$(aws ssm get-parameter \
-              --name "${PARAM_NAME}" \
+              --name "${PARAMETER_NAME}" \
               --with-decryption \
               --query "Parameter.Value" \
               --output text 2>/tmp/ssm_error.log)
 
             if [ $? -ne 0 ]; then
-              echo "Error: Failed to fetch ${PARAM_NAME} from SSM Parameter Store"
+              echo "Error: Failed to fetch ${PARAM_KEY} from SSM Parameter Store"
               cat /tmp/ssm_error.log
               exit 1
             fi
 
             if [ -z "$PARAM_VALUE" ] || [ "$PARAM_VALUE" = "None" ]; then
-              echo "Error: ${PARAM_NAME} returned empty value from SSM Parameter Store"
+              echo "Error: ${PARAM_KEY} returned empty value from SSM Parameter Store"
               exit 1
             fi
 
-            export "${PARAM_NAME}"="${PARAM_VALUE}"
-            echo "Successfully fetched ${PARAM_NAME}"
+            export "${PARAM_KEY}"="${PARAM_VALUE}"
+            echo "Successfully fetched ${PARAM_KEY}"
           done
 
           # Task Definition 조회
