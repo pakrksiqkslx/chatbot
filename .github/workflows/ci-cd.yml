@@ -144,6 +144,40 @@ jobs:
           echo "Backend container: $CONTAINER_BACKEND"
           echo "Task definition: ${{ env.ECS_TASK_DEFINITION }}"
 
+          PARAMETERS=(
+            "REACT_APP_API_URL"
+            "HYPERCLOVA_API_KEY"
+            "PINECONE_API_KEY"
+            "PINECONE_INDEX_NAME"
+            "MONGODB_URI"
+            "MONGODB_DATABASE"
+            "JWT_SECRET_KEY"
+            "JWT_ACCESS_TOKEN_EXPIRE_MINUTES"
+          )
+
+          for PARAM_NAME in "${PARAMETERS[@]}"; do
+            echo "Fetching ${PARAM_NAME} from SSM Parameter Store..."
+            PARAM_VALUE=$(aws ssm get-parameter \
+              --name "${PARAM_NAME}" \
+              --with-decryption \
+              --query "Parameter.Value" \
+              --output text 2>/tmp/ssm_error.log)
+
+            if [ $? -ne 0 ]; then
+              echo "Error: Failed to fetch ${PARAM_NAME} from SSM Parameter Store"
+              cat /tmp/ssm_error.log
+              exit 1
+            fi
+
+            if [ -z "$PARAM_VALUE" ] || [ "$PARAM_VALUE" = "None" ]; then
+              echo "Error: ${PARAM_NAME} returned empty value from SSM Parameter Store"
+              exit 1
+            fi
+
+            export "${PARAM_NAME}"="${PARAM_VALUE}"
+            echo "Successfully fetched ${PARAM_NAME}"
+          done
+
           # Task Definition 조회
           echo "Fetching task definition..."
           TASK_DEF_JSON=$(aws ecs describe-task-definition \
@@ -165,9 +199,33 @@ jobs:
             --arg IMAGE_BACKEND "$IMAGE_BACKEND" \
             --arg CONTAINER_FRONTEND "$CONTAINER_FRONTEND" \
             --arg CONTAINER_BACKEND "$CONTAINER_BACKEND" \
+            --arg REACT_APP_API_URL "$REACT_APP_API_URL" \
+            --arg HYPERCLOVA_API_KEY "$HYPERCLOVA_API_KEY" \
+            --arg PINECONE_API_KEY "$PINECONE_API_KEY" \
+            --arg PINECONE_INDEX_NAME "$PINECONE_INDEX_NAME" \
+            --arg MONGODB_URI "$MONGODB_URI" \
+            --arg MONGODB_DATABASE "$MONGODB_DATABASE" \
+            --arg JWT_SECRET_KEY "$JWT_SECRET_KEY" \
+            --arg JWT_ACCESS_TOKEN_EXPIRE_MINUTES "$JWT_ACCESS_TOKEN_EXPIRE_MINUTES" \
             '
+            def set_env(container_name; key; value):
+              (.containerDefinitions[] | select(.name == container_name)).environment =
+                (
+                  (.containerDefinitions[] | select(.name == container_name) | .environment // [])
+                  | map(select(.name != key))
+                  | . + [{name: key, value: value}]
+                );
+
             (.containerDefinitions[] | select(.name == $CONTAINER_FRONTEND)).image = $IMAGE_FRONTEND |
             (.containerDefinitions[] | select(.name == $CONTAINER_BACKEND)).image = $IMAGE_BACKEND |
+            set_env($CONTAINER_FRONTEND; "REACT_APP_API_URL"; $REACT_APP_API_URL) |
+            set_env($CONTAINER_BACKEND; "HYPERCLOVA_API_KEY"; $HYPERCLOVA_API_KEY) |
+            set_env($CONTAINER_BACKEND; "PINECONE_API_KEY"; $PINECONE_API_KEY) |
+            set_env($CONTAINER_BACKEND; "PINECONE_INDEX_NAME"; $PINECONE_INDEX_NAME) |
+            set_env($CONTAINER_BACKEND; "MONGODB_URI"; $MONGODB_URI) |
+            set_env($CONTAINER_BACKEND; "MONGODB_DATABASE"; $MONGODB_DATABASE) |
+            set_env($CONTAINER_BACKEND; "JWT_SECRET_KEY"; $JWT_SECRET_KEY) |
+            set_env($CONTAINER_BACKEND; "JWT_ACCESS_TOKEN_EXPIRE_MINUTES"; $JWT_ACCESS_TOKEN_EXPIRE_MINUTES) |
             {
               family: .family,
               taskRoleArn: (if .taskRoleArn == null then empty else .taskRoleArn end),
