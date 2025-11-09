@@ -48,6 +48,10 @@ RUN apk del --no-cache apk-tools && \
 # nginx 설정 파일 복사
 COPY --from=builder /app/build /usr/share/nginx/html
 
+# 런타임 환경변수 주입 스크립트 복사
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 # nginx 설정 최적화 (압축 및 캐싱)
 RUN echo 'server { \
     listen 3000; \
@@ -102,5 +106,5 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
 
-# nginx 실행
-CMD ["nginx", "-g", "daemon off;"]
+# entrypoint 스크립트 실행 (환경변수 주입 후 nginx 시작)
+CMD ["/entrypoint.sh"]
