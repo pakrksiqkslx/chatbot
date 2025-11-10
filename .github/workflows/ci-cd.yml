@@ -74,22 +74,22 @@ jobs:
           TEST_OUTPUT=$(pytest test_main.py -v --tb=short 2>&1 || true)
           echo "$TEST_OUTPUT"
           
-          # 테스트 결과 확인 (호환성을 위해 sed 사용)
-          if echo "$TEST_OUTPUT" | grep -q "passed"; then
-            # "X passed" 패턴에서 숫자 추출
-            PASSED_LINE=$(echo "$TEST_OUTPUT" | grep "passed" | tail -1)
-            PASSED_COUNT=$(echo "$PASSED_LINE" | sed -n 's/.*\([0-9]\+\) passed.*/\1/p' | head -1 || echo "0")
-            FAILED_COUNT=$(echo "$TEST_OUTPUT" | grep -c "failed" || echo "0")
-            
-            if [ "$FAILED_COUNT" != "0" ]; then
+          # 테스트 결과 확인
+          # pytest 출력에서 "X passed" 패턴 찾기
+          if echo "$TEST_OUTPUT" | grep -qE "[0-9]+ passed"; then
+            # "failed"가 있는지 확인
+            if echo "$TEST_OUTPUT" | grep -qE "[0-9]+ failed"; then
+              FAILED_COUNT=$(echo "$TEST_OUTPUT" | grep -oE "[0-9]+ failed" | grep -oE "[0-9]+" | head -1)
               echo "❌ 테스트 실패: $FAILED_COUNT개 실패"
               exit 1
             else
+              # "X passed" 패턴에서 숫자 추출
+              PASSED_COUNT=$(echo "$TEST_OUTPUT" | grep -oE "[0-9]+ passed" | grep -oE "[0-9]+" | head -1)
               echo "✅ 모든 테스트 통과: $PASSED_COUNT개"
               exit 0
             fi
           else
-            echo "❌ 테스트 실행 실패"
+            echo "❌ 테스트 실행 실패 또는 결과를 파싱할 수 없음"
             exit 1
           fi
       
