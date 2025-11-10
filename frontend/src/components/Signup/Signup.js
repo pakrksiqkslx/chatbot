@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { authAPI } from '../../utils/api';
 import './Signup.css';
 
@@ -16,6 +17,26 @@ export default function Signup({ onSignup, onBack }) {
 
   const fullEmail = emailPrefix ? `${emailPrefix}@bu.ac.kr` : '';
 
+  const location = useLocation();
+
+  // 이메일 링크로 인증된 경우 처리: /signup?verifiedEmail=student@bu.ac.kr
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(location.search);
+      const verifiedEmail = params.get('verifiedEmail');
+      if (verifiedEmail && verifiedEmail.endsWith('@bu.ac.kr')) {
+        const prefix = verifiedEmail.replace('@bu.ac.kr', '');
+        setEmailPrefix(prefix);
+        setIsEmailVerified(true);
+        // 깔끔하게 쿼리 제거
+        const newUrl = window.location.origin + '/signup';
+        window.history.replaceState({}, '', newUrl);
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, [location.search]);
+
   // 이메일 인증 코드 발송
   async function handleSendVerification() {
     if (!emailPrefix.trim()) {
@@ -28,14 +49,14 @@ export default function Signup({ onSignup, onBack }) {
 
     try {
       // 실제 API 호출
+      // 서버는 이메일에 클릭용 링크를 포함하여 전송해야 합니다.
+      // 예: https://your-frontend/verify-email?token=... 형태
       await authAPI.sendVerificationEmail(fullEmail);
-      alert(`인증번호가 ${fullEmail}로 발송되었습니다.`);
+      alert(`${fullEmail}로 인증 메일을 발송했습니다. 메일의 버튼을 눌러 인증을 완료하세요.`);
       
-      // 개발용: 임시 코드 생성 (실제 환경에서는 제거)
+      // 개발 모드에서는 디버깅용 로그만 출력 (백엔드가 토큰과 이메일을 반환하지 않는다고 가정)
       if (process.env.NODE_ENV === 'development') {
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
-        setSentCode(code);
-        console.log('개발용 인증코드:', code);
+        console.log('개발 모드: 인증 이메일 발송 호출 완료');
       }
     } catch (error) {
       console.error('Verification email failed:', error);

@@ -72,6 +72,14 @@ export const authAPI = {
     });
   },
 
+  // 이메일 토큰으로 검증 (이메일 내 링크 클릭 시 사용)
+  verifyWithToken: async (token) => {
+    return apiCall('/auth/verify-email-token', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    });
+  },
+
   // 로그아웃
   logout: async () => {
     return apiCall('/auth/logout', {
