@@ -168,11 +168,29 @@ jobs:
           CONTAINER_FRONTEND: ${{ env.CONTAINER_FRONTEND_NAME }}
           CONTAINER_BACKEND: ${{ env.CONTAINER_BACKEND_NAME }}
         run: |
-          echo "Frontend image URI: $IMAGE_FRONTEND"
-          echo "Backend image URI: $IMAGE_BACKEND"
-          echo "Frontend container: $CONTAINER_FRONTEND"
-          echo "Backend container: $CONTAINER_BACKEND"
+          set -e  # 오류 발생 시 즉시 종료
+          
+          echo "=== Environment Variables Check ==="
+          echo "Frontend image URI: ${IMAGE_FRONTEND:-NOT_SET}"
+          echo "Backend image URI: ${IMAGE_BACKEND:-NOT_SET}"
+          echo "Frontend container: ${CONTAINER_FRONTEND:-NOT_SET}"
+          echo "Backend container: ${CONTAINER_BACKEND:-NOT_SET}"
           echo "Task definition: ${{ env.ECS_TASK_DEFINITION }}"
+          echo "AWS Region: ${{ env.AWS_REGION }}"
+          echo ""
+          
+          # 필수 변수 확인
+          if [ -z "$IMAGE_FRONTEND" ] || [ -z "$IMAGE_BACKEND" ]; then
+            echo "Error: Image URIs are not set"
+            echo "IMAGE_FRONTEND: $IMAGE_FRONTEND"
+            echo "IMAGE_BACKEND: $IMAGE_BACKEND"
+            exit 1
+          fi
+          
+          if [ -z "$CONTAINER_FRONTEND" ] || [ -z "$CONTAINER_BACKEND" ]; then
+            echo "Error: Container names are not set"
+            exit 1
+          fi
 
           PARAM_KEYS=(
             "REACT_APP_API_URL"
