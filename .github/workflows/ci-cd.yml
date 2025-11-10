@@ -70,7 +70,7 @@ jobs:
           export PINECONE_API_KEY=""
           export PINECONE_INDEX_NAME="test-index"
           
-          pytest test_main.py -v --tb=short || python test_main.py
+          pytest test_main.py -v --tb=short
       
       - name: Test import validation
         run: |
