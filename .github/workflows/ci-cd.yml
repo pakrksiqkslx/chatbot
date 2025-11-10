@@ -168,8 +168,6 @@ jobs:
           CONTAINER_FRONTEND: ${{ env.CONTAINER_FRONTEND_NAME }}
           CONTAINER_BACKEND: ${{ env.CONTAINER_BACKEND_NAME }}
         run: |
-          set -e  # 오류 발생 시 즉시 종료
-          
           echo "=== Environment Variables Check ==="
           echo "Frontend image URI: ${IMAGE_FRONTEND:-NOT_SET}"
           echo "Backend image URI: ${IMAGE_BACKEND:-NOT_SET}"
@@ -207,6 +205,7 @@ jobs:
           echo "AWS Region: ${{ env.AWS_REGION }}"
           echo "Current AWS identity:"
           aws sts get-caller-identity || echo "Warning: Failed to get AWS identity"
+          echo ""
 
           for PARAM_KEY in "${PARAM_KEYS[@]}"; do
             ENV_VAR_NAME="SSM_${PARAM_KEY}"
@@ -215,7 +214,32 @@ jobs:
               PARAMETER_NAME="$PARAM_KEY"
             fi
 
-            echo "Fetching ${PARAM_KEY} from SSM Parameter Store (parameter: ${PARAMETER_NAME})..."
+            echo "=========================================="
+            echo "Fetching ${PARAM_KEY} from SSM Parameter Store"
+            echo "Parameter name: ${PARAMETER_NAME}"
+            echo "AWS Region: ${{ env.AWS_REGION }}"
+            echo ""
+            
+            # 먼저 파라미터 존재 여부 확인
+            echo "Checking if parameter exists..."
+            PARAM_EXISTS=$(aws ssm describe-parameters \
+              --parameter-filters "Key=Name,Values=${PARAMETER_NAME}" \
+              --region ${{ env.AWS_REGION }} \
+              --query "length(Parameters)" \
+              --output text 2>&1)
+            
+            if [ "$PARAM_EXISTS" = "0" ] || [ -z "$PARAM_EXISTS" ]; then
+              echo "❌ Error: Parameter '${PARAMETER_NAME}' does not exist in SSM Parameter Store"
+              echo ""
+              echo "Available parameters with similar names:"
+              aws ssm describe-parameters \
+                --region ${{ env.AWS_REGION }} \
+                --query "Parameters[?contains(Name, '${PARAM_KEY}')].Name" \
+                --output table 2>&1 || echo "Could not list parameters"
+              exit 1
+            fi
+            
+            echo "✅ Parameter exists, fetching value..."
             
             # 오류 메시지를 변수에 저장
             ERROR_OUTPUT=$(aws ssm get-parameter \
@@ -228,30 +252,37 @@ jobs:
             EXIT_CODE=$?
             
             if [ $EXIT_CODE -ne 0 ]; then
-              echo "Error: Failed to fetch ${PARAM_KEY} from SSM Parameter Store"
+              echo "❌ Error: Failed to fetch ${PARAM_KEY} from SSM Parameter Store"
+              echo "Exit code: $EXIT_CODE"
               echo "Parameter name: ${PARAMETER_NAME}"
               echo "AWS Region: ${{ env.AWS_REGION }}"
-              echo "Error output:"
+              echo ""
+              echo "Full error output:"
               echo "$ERROR_OUTPUT"
               echo ""
-              echo "Checking if parameter exists..."
-              aws ssm describe-parameters \
-                --parameter-filters "Key=Name,Values=${PARAMETER_NAME}" \
-                --region ${{ env.AWS_REGION }} || echo "Failed to check parameter existence"
+              echo "Checking IAM permissions..."
+              aws iam get-role-policy \
+                --role-name github_ec2_ecs_role \
+                --policy-name SSMParameterAccess 2>&1 || echo "Could not check IAM policy"
               exit 1
             fi
 
             PARAM_VALUE="$ERROR_OUTPUT"
             
             if [ -z "$PARAM_VALUE" ] || [ "$PARAM_VALUE" = "None" ]; then
-              echo "Error: ${PARAM_KEY} returned empty value from SSM Parameter Store"
+              echo "❌ Error: ${PARAM_KEY} returned empty value from SSM Parameter Store"
               echo "Parameter name: ${PARAMETER_NAME}"
               exit 1
             fi
 
             export "${PARAM_KEY}"="${PARAM_VALUE}"
-            echo "Successfully fetched ${PARAM_KEY} (value length: ${#PARAM_VALUE} characters)"
+            echo "✅ Successfully fetched ${PARAM_KEY} (value length: ${#PARAM_VALUE} characters)"
+            echo ""
           done
+          
+          echo "=========================================="
+          echo "✅ All parameters fetched successfully"
+          echo "=========================================="
 
           # Task Definition 조회
           echo "Fetching task definition..."
