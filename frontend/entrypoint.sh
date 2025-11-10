@@ -17,3 +17,4 @@ echo "환경변수 설정 완료: REACT_APP_API_URL=${API_URL}"
 exec nginx -g 'daemon off;'
 
 
+
