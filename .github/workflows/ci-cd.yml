@@ -44,6 +44,11 @@ jobs:
           cd backend
           pip install --upgrade pip
           pip install -r requirements.txt
+          
+      - name: Verify pytest installation
+        run: |
+          cd backend
+          pytest --version || (echo "pytest not found, installing..." && pip install pytest>=7.4.0)
       
       - name: Run tests
         run: |
