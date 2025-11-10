@@ -1,5 +1,8 @@
 // API 기본 설정
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+// 런타임 환경변수 우선 사용 (window._env_는 nginx 시작 시 주입됨)
+const API_BASE_URL = (window._env_ && window._env_.REACT_APP_API_URL) 
+  || process.env.REACT_APP_API_URL 
+  || 'http://localhost:5000/api';
 
 // API 호출 유틸리티 함수
 export const apiCall = async (endpoint, options = {}) => {
