@@ -5,6 +5,7 @@ import Header from './components/Header/Header';
 import ChatWindow from './components/ChatWindow/ChatWindow';
 import Login from './components/Login/Login';
 import Signup from './components/Signup/Signup';
+import VerifyEmail from './components/VerifyEmail/VerifyEmail';
 import Sidebar from './components/Sidebar/Sidebar';
 import RightToolbar from './components/RightToolbar/RightToolbar';
 import Footer from './components/Footer/Footer';
@@ -279,7 +280,8 @@ function App() {
       <Routes>
         <Route path="/" element={<MainApp />} />
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignupPage />} />
+  <Route path="/signup" element={<SignupPage />} />
+  <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
