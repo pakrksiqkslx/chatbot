@@ -98,4 +98,56 @@ export const authAPI = {
   },
 };
 
+// 대화방 목록 조회
+export const getConversations = async () => {
+  const token = localStorage.getItem('access_token');
+  const response = await apiCall('/conversations', {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  return response;
+};
+
+// 새 대화방 생성
+export const createConversation = async (title) => {
+  const token = localStorage.getItem('access_token');
+  const response = await apiCall('/conversations', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ title }),
+  });
+  return response;
+};
+
+// 특정 대화방 메시지 조회
+export const getMessages = async (conversationId) => {
+  const token = localStorage.getItem('access_token');
+  const response = await apiCall(`/conversations/${conversationId}/messages`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  return response;
+};
+
+// 메시지 전송
+export const sendMessage = async (conversationId, query, k = 3, includeSources = true) => {
+  const token = localStorage.getItem('access_token');
+  const response = await apiCall('/chat', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ conversation_id: conversationId, query, k, include_sources: includeSources }),
+  });
+  return response;
+};
+
 export { API_BASE_URL };

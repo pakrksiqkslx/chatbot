@@ -1,7 +1,34 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import './Sidebar.css';
+import { getConversations, createConversation } from '../../utils/api';
 
-export default function Sidebar({ open, sessions = [], currentSessionIdx, onSelectSession, onNewChat }) {
+export default function Sidebar({ open, sessions = [], currentSessionIdx, onSelectSession, onNewChat, onSelectRoom }) {
+  const [rooms, setRooms] = useState([]);
+  const [newRoomTitle, setNewRoomTitle] = useState('');
+
+  useEffect(() => {
+    async function fetchRooms() {
+      try {
+        const data = await getConversations();
+        setRooms(data);
+      } catch (error) {
+        console.error('Failed to load chat rooms:', error);
+      }
+    }
+    fetchRooms();
+  }, []);
+
+  async function handleCreateRoom() {
+    if (!newRoomTitle.trim()) return;
+    try {
+      const newRoom = await createConversation(newRoomTitle);
+      setRooms([newRoom, ...rooms]);
+      setNewRoomTitle('');
+    } catch (error) {
+      console.error('Failed to create chat room:', error);
+    }
+  }
+
   return (
     <div className={`sidebar${open ? ' sidebar--open' : ''}`}> 
       <div className="sidebar__menu">
@@ -32,6 +59,24 @@ export default function Sidebar({ open, sessions = [], currentSessionIdx, onSele
       <div className="sidebar__footer">
         <div className="sidebar__item">활동</div>
         <div className="sidebar__item">설정 및 도움말</div>
+      </div>
+
+      {/* 새로운 대화방 관리 로직 (UI 변경 없음) */}
+      <div style={{ display: 'none' }}>
+        <input
+          type="text"
+          placeholder="새 대화방 제목"
+          value={newRoomTitle}
+          onChange={(e) => setNewRoomTitle(e.target.value)}
+        />
+        <button onClick={handleCreateRoom}>대화방 생성</button>
+        <div>
+          {rooms.map((room) => (
+            <div key={room.id} onClick={() => onSelectRoom(room.id)}>
+              {room.title}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
