@@ -59,10 +59,7 @@ function MainApp() {
         setLoadingMessage('AI가 답변을 생성하고 있습니다...');
       }, 2000);
       
-      // 런타임 환경변수 우선 사용 (window._env_는 nginx 시작 시 주입됨)
-      const apiUrl = (window._env_ && window._env_.REACT_APP_API_URL) 
-        || process.env.REACT_APP_API_URL 
-        || 'http://localhost:5000/api';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
       const response = await fetch(`${apiUrl}/chat`, {
         method: 'POST',
         headers: {
