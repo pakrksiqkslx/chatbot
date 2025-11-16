@@ -1,5 +1,8 @@
 // API 기본 설정
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+// 런타임 환경변수 우선 사용 (window._env_는 nginx 시작 시 주입됨)
+const API_BASE_URL = (window._env_ && window._env_.REACT_APP_API_URL) 
+  || process.env.REACT_APP_API_URL 
+  || 'http://localhost:5000/api';
 
 // API 호출 유틸리티 함수
 export const apiCall = async (endpoint, options = {}) => {
@@ -46,10 +49,34 @@ export const authAPI = {
   },
 
   // 회원가입
-  signup: async (email, password) => {
+  signup: async (userData) => {
     return apiCall('/auth/signup', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(userData),
+    });
+  },
+
+  // 이메일 인증번호 발송
+  sendVerificationEmail: async (email) => {
+    return apiCall('/auth/send-verification', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  // 이메일 인증번호 확인
+  verifyEmail: async (email, code) => {
+    return apiCall('/auth/verify-email', {
+      method: 'POST',
+      body: JSON.stringify({ email, code }),
+    });
+  },
+
+  // 이메일 토큰으로 검증 (이메일 내 링크 클릭 시 사용)
+  verifyWithToken: async (token) => {
+    return apiCall('/auth/verify-email-token', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
     });
   },
 
