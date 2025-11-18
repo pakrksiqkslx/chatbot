@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import './Sidebar.css';
 import { getConversations, createConversation } from '../../utils/api';
 
-export default function Sidebar({ open, sessions = [], currentSessionIdx, onSelectSession, onNewChat, onSelectRoom }) {
+export default function Sidebar({ open, sessions = [], currentSessionIdx, onSelectSession, onNewChat, onSelectRoom, onLogout }) {
   const [rooms, setRooms] = useState([]);
   const [newRoomTitle, setNewRoomTitle] = useState('');
 
@@ -55,10 +55,11 @@ export default function Sidebar({ open, sessions = [], currentSessionIdx, onSele
             })}
         </div>
       </div>
-      {/* 하단: 활동/설정 및 도움말 */}
+      {/* 하단: 로그아웃 버튼 */}
       <div className="sidebar__footer">
-        <div className="sidebar__item">활동</div>
-        <div className="sidebar__item">설정 및 도움말</div>
+        <div className="sidebar__item" style={{ cursor: 'pointer', color: '#d32f2f', fontWeight: 600 }} onClick={onLogout}>
+          로그아웃
+        </div>
       </div>
 
       {/* 새로운 대화방 관리 로직 (UI 변경 없음) */}
