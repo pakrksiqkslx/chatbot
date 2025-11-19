@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { authAPI } from '../../utils/api';
 import './Login.css';
 
-export default function Login({ onLogin, onSignup, onBack }) {
+export default function Login({ onLogin, onSignup, onBack, onFindPassword }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -72,6 +72,14 @@ export default function Login({ onLogin, onSignup, onBack }) {
           style={{ marginTop: 8, background: '#eee', color: '#1976d2' }}
         >
           회원가입
+        </button>
+        <button
+          type="button"
+          className="login-signup-btn"
+          onClick={onFindPassword}
+          style={{ marginTop: 8, background: '#eee', color: '#1976d2' }}
+        >
+          비밀번호 찾기
         </button>
       </form>
     </div>
