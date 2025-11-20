@@ -96,7 +96,7 @@ export const authAPI = {
 
   // 이메일 인증번호 발송
   sendVerificationEmail: async (email) => {
-    return apiCall('/auth/send-verification', {
+    return apiCall('/auth/send-verification-email', {
       method: 'POST',
       body: JSON.stringify({ email }),
     });
@@ -112,7 +112,7 @@ export const authAPI = {
 
   // 이메일 토큰으로 검증 (이메일 내 링크 클릭 시 사용)
   verifyWithToken: async (token) => {
-    return apiCall('/auth/verify-email-token', {
+    return apiCall('/auth/verify-email', {
       method: 'POST',
       body: JSON.stringify({ token }),
     });
@@ -193,8 +193,8 @@ export const getMessages = async (conversationId) => {
       Authorization: `Bearer ${token}`,
     },
   });
-  // 백엔드 응답 구조: { success: true, data: [...] }
-  return response.data || response || [];
+  // 백엔드 응답 구조: { success: true, data: { messages: [...], total: N } }
+  return response.data || response;
 };
 
 // 메시지 전송

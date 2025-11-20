@@ -121,14 +121,30 @@ async def _process_chat_message(
 
     logger.info(f"채팅 요청: {query} (대화: {conversation_id})")
 
-    # 2. 현재 메시지 순서 계산
+    # 2. 최근 메시지 3개 조회 (대화 흐름 유지용)
+    recent_messages = await messages_collection.find(
+        {"conversation_id": conv_object_id}
+    ).sort("order", -1).limit(3).to_list(length=3)
+    
+    # 최근 메시지를 시간순으로 정렬 (오래된 것부터)
+    recent_messages.reverse()
+    
+    # 메시지 히스토리 구성 (role과 content만)
+    message_history = [
+        {"role": msg["role"], "content": msg["content"]}
+        for msg in recent_messages
+    ]
+    
+    logger.info(f"최근 메시지 {len(message_history)}개를 컨텍스트로 포함")
+
+    # 3. 현재 메시지 순서 계산
     message_count = await messages_collection.count_documents(
         {"conversation_id": conv_object_id}
     )
     user_message_order = message_count
     bot_message_order = message_count + 1
 
-    # 3. 사용자 메시지 저장
+    # 4. 사용자 메시지 저장
     now = datetime.utcnow()
     user_message_doc = {
         "conversation_id": conv_object_id,
@@ -139,20 +155,20 @@ async def _process_chat_message(
     }
     await messages_collection.insert_one(user_message_doc)
 
-    # 4. AI 응답 생성
+    # 5. AI 응답 생성
     hyperclova = get_hyperclova_client()
 
-    # 4-1. 질문 의도 분류
+    # 5-1. 질문 의도 분류
     intent = await hyperclova.classify_intent(query)
     logger.info(f"질문 의도: {intent}")
 
-    # 4-2. 일상 대화인 경우 바로 답변
+    # 5-2. 일상 대화인 경우 바로 답변
     if intent == 'casual_chat':
         logger.info("일상 대화로 분류 - 직접 답변 생성")
-        answer = await hyperclova.generate_casual_answer(query)
+        answer = await hyperclova.generate_casual_answer(query, message_history)
         sources = []
     else:
-        # 4-3. 수업 관련: Pinecone 벡터 검색
+        # 5-3. 수업 관련: Pinecone 벡터 검색
         logger.info(f"{intent} 분류 - 벡터 검색 수행")
 
         vectorstore = get_vectorstore_service()
@@ -167,13 +183,14 @@ async def _process_chat_message(
         else:
             logger.info(f"검색된 문서 수: {len(search_results)}")
 
-            # 4-4. HyperCLOVA 답변 생성
+            # 5-4. HyperCLOVA 답변 생성 (최근 메시지 히스토리 포함)
             answer = await hyperclova.generate_answer(
                 query=query,
-                context_docs=search_results
+                context_docs=search_results,
+                message_history=message_history
             )
 
-            # 4-5. 출처 구성
+            # 5-5. 출처 구성
             sources = []
             if include_sources:
                 for result in search_results:
@@ -184,7 +201,7 @@ async def _process_chat_message(
                         "content_preview": result["page_content"][:200] + "..."
                     })
 
-    # 5. 봇 메시지 저장
+    # 6. 봇 메시지 저장
     bot_message_doc = {
         "conversation_id": conv_object_id,
         "role": "assistant",
@@ -196,13 +213,13 @@ async def _process_chat_message(
     bot_message_result = await messages_collection.insert_one(bot_message_doc)
     bot_message_id = str(bot_message_result.inserted_id)
 
-    # 6. 대화방 updated_at 갱신
+    # 7. 대화방 updated_at 갱신
     await conversations_collection.update_one(
         {"_id": conv_object_id},
         {"$set": {"updated_at": datetime.utcnow()}}
     )
 
-    # 7. 자동 제목 생성 (1번째 또는 5번째 대화)
+    # 8. 자동 제목 생성 (1번째 또는 5번째 대화)
     new_message_count = bot_message_order + 1  # 사용자 + 봇 메시지 포함
     if new_message_count == 2 or new_message_count == 10:
         await auto_generate_title(

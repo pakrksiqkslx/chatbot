@@ -1,86 +1,70 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import './Sidebar.css';
-import { getConversations, createConversation } from '../../utils/api';
 
-export default function Sidebar({ open, sessions = [], currentSessionIdx, onSelectSession, onNewChat, onSelectRoom, onLogout }) {
-  const [rooms, setRooms] = useState([]);
-  const [newRoomTitle, setNewRoomTitle] = useState('');
-
-  useEffect(() => {
-    async function fetchRooms() {
-      try {
-        const data = await getConversations();
-        console.log('Sidebar에서 받은 데이터:', data);
-        console.log('데이터 타입:', typeof data);
-        console.log('Array인가?', Array.isArray(data));
-        setRooms(Array.isArray(data) ? data : []);
-      } catch (error) {
-        console.error('Failed to load chat rooms:', error);
-        setRooms([]);
-      }
-    }
-    fetchRooms();
-  }, []);
-
-  async function handleCreateRoom() {
-    if (!newRoomTitle.trim()) return;
-    try {
-      const newRoom = await createConversation(newRoomTitle);
-      setRooms([newRoom, ...rooms]);
-      setNewRoomTitle('');
-    } catch (error) {
-      console.error('Failed to create chat room:', error);
-    }
-  }
-
+export default function Sidebar({ open, conversations = [], currentConversationId, onSelectConversation, onNewChat, onLogout }) {
   return (
     <div className={`sidebar${open ? ' sidebar--open' : ''}`}> 
       <div className="sidebar__menu">
-        {/* 상단: 새 채팅/채팅목록/채팅 세션 */}
+        {/* 상단: 새 채팅 버튼 */}
         <button className="sidebar__newchat-btn" onClick={onNewChat}>
           새 채팅
         </button>
+        
+        {/* 채팅 목록 제목 */}
         <div className="sidebar__item sidebar__item--title">채팅 목록</div>
+        
+        {/* 채팅방 목록 */}
         <div className="sidebar__sessions">
-          {sessions
-            .filter(session => session.messages.some(m => m.from === 'user'))
-            .map((session, idx) => {
-              const lastUserMsg = [...session.messages].reverse().find(m => m.from === 'user');
-              const preview = lastUserMsg ? lastUserMsg.text.slice(0, 18) : '';
+          {conversations.length === 0 ? (
+            <div style={{ padding: '10px', color: '#999', fontSize: '14px', textAlign: 'center' }}>
+              채팅방이 없습니다
+            </div>
+          ) : (
+            conversations.map((conversation) => {
+              const isActive = conversation.id === currentConversationId;
               return (
                 <div
-                  key={session.id}
-                  className={`sidebar__session${idx === currentSessionIdx ? ' sidebar__session--active' : ''}`}
-                  onClick={() => onSelectSession(idx)}
+                  key={conversation.id}
+                  className={`sidebar__session${isActive ? ' sidebar__session--active' : ''}`}
+                  onClick={() => onSelectConversation(conversation.id)}
+                  title={conversation.title}
                 >
-                  {preview}
+                  <div style={{ 
+                    overflow: 'hidden', 
+                    textOverflow: 'ellipsis', 
+                    whiteSpace: 'nowrap',
+                    fontWeight: isActive ? 600 : 400
+                  }}>
+                    {conversation.title || '새 대화'}
+                  </div>
+                  {conversation.updated_at && (
+                    <div style={{ 
+                      fontSize: '12px', 
+                      color: '#999', 
+                      marginTop: '4px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      {new Date(conversation.updated_at).toLocaleDateString('ko-KR', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </div>
+                  )}
                 </div>
               );
-            })}
+            })
+          )}
         </div>
       </div>
+      
       {/* 하단: 로그아웃 버튼 */}
       <div className="sidebar__footer">
         <div className="sidebar__item" style={{ cursor: 'pointer', color: '#d32f2f', fontWeight: 600 }} onClick={onLogout}>
           로그아웃
-        </div>
-      </div>
-
-      {/* 새로운 대화방 관리 로직 (UI 변경 없음) */}
-      <div style={{ display: 'none' }}>
-        <input
-          type="text"
-          placeholder="새 대화방 제목"
-          value={newRoomTitle}
-          onChange={(e) => setNewRoomTitle(e.target.value)}
-        />
-        <button onClick={handleCreateRoom}>대화방 생성</button>
-        <div>
-          {rooms.map((room) => (
-            <div key={room.id} onClick={() => onSelectRoom(room.id)}>
-              {room.title}
-            </div>
-          ))}
         </div>
       </div>
     </div>
