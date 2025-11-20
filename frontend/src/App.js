@@ -31,24 +31,48 @@ function makeDefaultSession() {
 
 function MainApp() {
   const navigate = useNavigate();
-  // 상태 관리
-  const [sessions, setSessions] = useState([makeDefaultSession()]);
-  const [currentSessionIdx, setCurrentSessionIdx] = useState(0);
+  // 상태 관리 - localStorage에서 세션 복원
+  const [sessions, setSessions] = useState(() => {
+    const savedSessions = localStorage.getItem('chatSessions');
+    if (savedSessions) {
+      try {
+        return JSON.parse(savedSessions);
+      } catch (e) {
+        console.error('세션 복원 실패:', e);
+      }
+    }
+    return [makeDefaultSession()];
+  });
+  const [currentSessionIdx, setCurrentSessionIdx] = useState(() => {
+    const savedIdx = localStorage.getItem('currentSessionIdx');
+    return savedIdx ? parseInt(savedIdx, 10) : 0;
+  });
   const currentSessionIdxRef = useRef(currentSessionIdx);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pendingSession, setPendingSession] = useState(null);
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    // 초기 렌더링 시 localStorage에서 사용자 정보 복원
+    const savedEmail = localStorage.getItem('userEmail');
+    return savedEmail || null;
+  });
   const [currentPage, setCurrentPage] = useState('chat');
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [showFindPassword, setShowFindPassword] = useState(false);
 
+  // 세션을 localStorage에 저장
   React.useEffect(() => {
+    localStorage.setItem('chatSessions', JSON.stringify(sessions));
+  }, [sessions]);
+
+  // 현재 세션 인덱스를 localStorage에 저장
+  React.useEffect(() => {
+    localStorage.setItem('currentSessionIdx', currentSessionIdx.toString());
     currentSessionIdxRef.current = currentSessionIdx;
   }, [currentSessionIdx]);
 
-  // 로그인 상태 확인
-  const isLoggedIn = !!localStorage.getItem('authToken');
+  // 로그인 상태 확인 (localStorage와 user 상태 모두 체크)
+  const isLoggedIn = (!!localStorage.getItem('authToken') && !!localStorage.getItem('access_token')) || !!user;
   if (!isLoggedIn) {
     if (showFindPassword) {
       return (
@@ -59,7 +83,7 @@ function MainApp() {
       <Login
         onLogin={email => {
           setUser(email);
-          navigate('/');
+          // navigate는 필요 없음 - setUser가 리렌더링을 트리거함
         }}
         onSignup={() => {
           navigate('/signup');
@@ -97,6 +121,65 @@ function MainApp() {
     );
   }
 
+  // 메시지 전송 핸들러
+  const handleSendMessage = async (text) => {
+    if (!text.trim()) return;
+
+    setIsLoading(true);
+    setLoadingMessage('답변을 생성하고 있습니다...');
+
+    try {
+      // 로컬에 사용자 메시지 추가
+      const userMessage = {
+        id: generateMessageId(),
+        from: 'user',
+        text: text.trim(),
+        ts: Date.now()
+      };
+
+      const currentMessages = sessions[currentSessionIdx]?.messages || [];
+      const updatedMessages = [...currentMessages, userMessage];
+
+      setSessions(prev => {
+        const newSessions = [...prev];
+        newSessions[currentSessionIdx] = {
+          ...newSessions[currentSessionIdx],
+          messages: updatedMessages
+        };
+        return newSessions;
+      });
+
+      // 백엔드 API 호출
+      const { sendMessage } = await import('./utils/api');
+      const response = await sendMessage(null, text.trim(), 3, true);
+
+      // 봇 응답 추가
+      const botMessage = {
+        id: generateMessageId(),
+        from: 'bot',
+        text: response.answer || response.data?.answer || '응답을 받지 못했습니다.',
+        sources: response.sources || response.data?.sources || [],
+        ts: Date.now()
+      };
+
+      setSessions(prev => {
+        const newSessions = [...prev];
+        newSessions[currentSessionIdx] = {
+          ...newSessions[currentSessionIdx],
+          messages: [...updatedMessages, botMessage]
+        };
+        return newSessions;
+      });
+
+    } catch (error) {
+      console.error('메시지 전송 실패:', error);
+      alert('메시지 전송에 실패했습니다: ' + error.message);
+    } finally {
+      setIsLoading(false);
+      setLoadingMessage('');
+    }
+  };
+
   // 챗봇 UI
   return (
     <div className="app-bg">
@@ -104,7 +187,7 @@ function MainApp() {
         <Header title="수업 플래너 챗봇" />
         <ChatWindow
           messages={pendingSession ? pendingSession.messages : sessions[currentSessionIdx]?.messages}
-          onSend={() => {}}
+          onSend={handleSendMessage}
           sidebarOpen={sidebarOpen}
         />
       </div>
@@ -112,19 +195,32 @@ function MainApp() {
         open={sidebarOpen}
         sessions={sessions}
         currentSessionIdx={currentSessionIdx}
-        onSelectSession={() => {}}
-        onNewChat={() => {}}
+        onSelectSession={(idx) => {
+          setCurrentSessionIdx(idx);
+        }}
+        onNewChat={() => {
+          const newSession = makeDefaultSession();
+          setSessions(prev => [newSession, ...prev]);
+          setCurrentSessionIdx(0);
+        }}
         onLogout={() => {
           setUser(null);
           localStorage.removeItem('authToken');
           localStorage.removeItem('userEmail');
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('chatSessions');
+          localStorage.removeItem('currentSessionIdx');
           navigate('/login');
         }}
       />
       <RightToolbar
         onToggle={() => setSidebarOpen((s) => !s)}
         sidebarOpen={sidebarOpen}
-        onNewChat={() => {}}
+        onNewChat={() => {
+          const newSession = makeDefaultSession();
+          setSessions(prev => [newSession, ...prev]);
+          setCurrentSessionIdx(0);
+        }}
         onLoginClick={() => {
           navigate('/login');
         }}
@@ -132,11 +228,12 @@ function MainApp() {
           setUser(null);
           localStorage.removeItem('authToken');
           localStorage.removeItem('userEmail');
+          localStorage.removeItem('access_token');
           navigate('/login');
         }}
         isLoggedIn={!!user}
       />
-      <Footer 
+      <Footer
         currentPage={currentPage}
         onPageChange={setCurrentPage}
       />
