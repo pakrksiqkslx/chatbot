@@ -10,9 +10,13 @@ export default function Sidebar({ open, sessions = [], currentSessionIdx, onSele
     async function fetchRooms() {
       try {
         const data = await getConversations();
-        setRooms(data);
+        console.log('Sidebar에서 받은 데이터:', data);
+        console.log('데이터 타입:', typeof data);
+        console.log('Array인가?', Array.isArray(data));
+        setRooms(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error('Failed to load chat rooms:', error);
+        setRooms([]);
       }
     }
     fetchRooms();
