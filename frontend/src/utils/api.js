@@ -193,8 +193,8 @@ export const getMessages = async (conversationId) => {
       Authorization: `Bearer ${token}`,
     },
   });
-  // 백엔드 응답 구조: { success: true, data: [...] }
-  return response.data || response || [];
+  // 백엔드 응답 구조: { success: true, data: { messages: [...], total: N } }
+  return response.data || response;
 };
 
 // 메시지 전송
