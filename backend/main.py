@@ -1,7 +1,8 @@
-from fastapi import FastAPI, HTTPException, APIRouter
+from fastapi import FastAPI, HTTPException, APIRouter, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel
 import uvicorn
 import logging
@@ -64,6 +65,30 @@ else:
     )
 
 router = APIRouter(prefix=settings.API_PREFIX)
+
+# Validation Error 핸들러 추가 (422 에러 로깅)
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """422 Validation Error를 상세히 로깅"""
+    errors = exc.errors()
+    error_details = []
+    for error in errors:
+        field = " -> ".join(str(loc) for loc in error.get("loc", []))
+        error_details.append({
+            "field": field,
+            "message": error.get("msg"),
+            "type": error.get("type")
+        })
+    
+    logger.warning(
+        f"Validation Error - {request.method} {request.url.path}: {error_details}"
+    )
+    
+    # 기본 FastAPI validation error 응답 반환
+    return JSONResponse(
+        status_code=422,
+        content={"detail": errors}
+    )
 
 # 라우터 등록
 app.include_router(auth.router, prefix=settings.API_PREFIX)
