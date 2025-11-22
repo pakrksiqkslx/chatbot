@@ -123,8 +123,13 @@ async def send_verification_email(email: str, token: str, frontend_url: str = "h
     Args:
         email: 수신자 이메일
         token: 인증 토큰
-        frontend_url: 프론트엔드 URL
+        frontend_url: 프론트엔드 URL (기본값 사용 시 환경에 따라 자동 설정)
+        is_password_reset: 비밀번호 재설정 여부
     """
+    # 프로덕션 환경일 때 frontend_url 자동 설정
+    if settings.ENVIRONMENT == "production" and frontend_url == "http://localhost:3000":
+        frontend_url = "http://bu-chatbot.co.kr"
+    
     # SMTP 설정
     smtp_server = "smtp.gmail.com"
     smtp_port = 587
