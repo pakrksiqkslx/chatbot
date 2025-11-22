@@ -184,18 +184,27 @@ jobs:
         id: fetch-ssm
         run: |
           # SSM Parameter Store에서 가져올 파라미터 이름 목록을 준비
-          PARAM_NAMES=$(echo "${{ env.SSM_KEYS }}" | tr -d '[:space:]' | tr '\n' ',' | sed 's/,$//')
+          # 멀티라인 문자열을 배열로 변환
+          SSM_KEYS_STR="${{ env.SSM_KEYS }}"
           
           # 파라미터 전체 경로 배열 생성
           PARAM_PATHS=()
-          for KEY in ${{ env.SSM_KEYS }}; do
+          while IFS= read -r KEY; do
+            [ -z "$KEY" ] && continue
+            
+            KEY=$(echo "$KEY" | xargs)
+            [ -z "$KEY" ] && continue
+            
+            # 환경 변수에서 SSM 경로 가져오기
             ENV_VAR_NAME="SSM_${KEY}"
-            PATH_VAR=$(printenv "${ENV_VAR_NAME}")
+            PATH_VAR=$(printenv "${ENV_VAR_NAME}" || echo "")
             if [ -z "$PATH_VAR" ]; then
-              PATH_VAR="$KEY"
+              # 기본 경로 형식 사용
+              PATH_VAR="/prod/${KEY}"
             fi
             PARAM_PATHS+=("$PATH_VAR")
-          done
+            echo "Added parameter path: $PATH_VAR (from key: $KEY)"
+          done <<< "$SSM_KEYS_STR"
           
           # AWS SSM API 호출 횟수를 줄이기 위해 모든 파라미터를 한 번에 가져옴
           echo "Fetching SSM parameters: ${PARAM_PATHS[*]}"
@@ -204,7 +213,7 @@ jobs:
             --names "${PARAM_PATHS[@]}" \
             --with-decryption \
             --region ${{ env.AWS_REGION }} \
-            --query "Parameters[*].[Name, Value]" \
+            --query "Parameters[*]" \
             --output json)
 
           if [ $? -ne 0 ]; then
@@ -214,18 +223,20 @@ jobs:
           fi
 
           # 파라미터 값들을 환경 변수로 내보내기 위해 GITHUB_OUTPUT에 설정
-          SSM_ARRAY=$(echo "$SSM_OUTPUT" | jq -r '.[] | "\(.Name)=\(.Value)"')
-          
-          # 키/값 쌍을 GITHUB_OUTPUT 형식에 맞게 변환
-          for pair in $SSM_ARRAY; do
-            NAME_WITH_PATH=$(echo "$pair" | cut -d'=' -f1)
-            VALUE=$(echo "$pair" | cut -d'=' -f2-)
+          # jq를 사용하여 각 파라미터를 처리
+          echo "$SSM_OUTPUT" | jq -c '.[]' | while read -r param; do
+            NAME_WITH_PATH=$(echo "$param" | jq -r '.Name')
+            VALUE=$(echo "$param" | jq -r '.Value')
             
             # 파라미터 이름에서 경로('/prod/')를 제거하고 환경 변수 이름만 추출
             ENV_KEY=$(echo "$NAME_WITH_PATH" | sed 's|^/prod/||')
             
-            # 후속 단계에서 사용할 수 있도록 ${{ steps.fetch-ssm.outputs.ENV_KEY }}에 값 설정
-            echo "${ENV_KEY}=${VALUE}" >> $GITHUB_OUTPUT
+            # GITHUB_OUTPUT에 추가 (멀티라인 값 지원을 위해 delimiter 사용)
+            {
+              echo "${ENV_KEY}<<EOF"
+              echo "$VALUE"
+              echo "EOF"
+            } >> $GITHUB_OUTPUT
             echo "✅ Successfully fetched ${ENV_KEY}"
           done
 
