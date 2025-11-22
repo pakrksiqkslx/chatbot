@@ -8,7 +8,11 @@ WORKDIR /app
 COPY package*.json ./
 
 # 의존성 설치 최적화 (빌드 시 모든 의존성 필요)
-RUN npm ci --no-audit --no-fund && \
+# npm ci 실패 시 자동으로 npm install로 폴백
+RUN npm cache verify && \
+    npm ci --no-audit --no-fund --legacy-peer-deps 2>&1 || \
+    (echo "npm ci failed, falling back to npm install" && \
+     npm install --no-audit --no-fund --legacy-peer-deps) && \
     npm cache clean --force && \
     rm -rf /tmp/* /var/cache/apk/*
 
