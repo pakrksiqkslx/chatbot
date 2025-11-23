@@ -48,14 +48,17 @@ export const apiCall = async (endpoint, options = {}) => {
       const errorData = await response.json().catch(() => ({}));
 
       // 백엔드 에러 응답 구조 처리
-      // { detail: { error: { message: "..." } } } 또는 { detail: "..." } 또는 { message: "..." }
+      // { detail: { error: { message: "...", details: "..." } } } 또는 { detail: "..." } 또는 { message: "..." }
       let errorMessage = `HTTP error! status: ${response.status}`;
 
       if (errorData.detail) {
         if (typeof errorData.detail === 'string') {
           errorMessage = errorData.detail;
-        } else if (errorData.detail.error?.message) {
-          errorMessage = errorData.detail.error.message;
+        } else if (errorData.detail.error) {
+          // error 객체가 있는 경우 message와 details를 조합
+          const message = errorData.detail.error.message || '';
+          const details = errorData.detail.error.details || '';
+          errorMessage = details ? `${message}\n${details}` : message;
         } else if (errorData.detail.message) {
           errorMessage = errorData.detail.message;
         }

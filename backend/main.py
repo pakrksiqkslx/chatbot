@@ -102,9 +102,23 @@ app.include_router(conversations.router, prefix=settings.API_PREFIX)
 # MongoDB 연결 이벤트
 @app.on_event("startup")
 async def startup_db_client():
-    """앱 시작 시 MongoDB 연결"""
-    await db_instance.connect_db()
-    logger.info("MongoDB Atlas 연결 완료")
+    """앱 시작 시 MongoDB 연결 및 설정 검증"""
+    # 프로덕션 환경 설정 검증
+    if settings.ENVIRONMENT == "production":
+        validate_production_settings()
+    
+    # MongoDB 연결
+    try:
+        await db_instance.connect_db()
+        logger.info("MongoDB Atlas 연결 완료")
+    except Exception as e:
+        logger.error(f"MongoDB 연결 실패: {e}")
+        if settings.ENVIRONMENT == "production":
+            # 프로덕션에서는 MongoDB 연결 실패 시 앱 시작 중단
+            raise
+        else:
+            # 개발 환경에서는 경고만 출력하고 계속 진행
+            logger.warning("개발 환경: MongoDB 연결 실패했지만 앱은 계속 실행됩니다.")
 
 
 @router.get("/")
@@ -197,10 +211,43 @@ async def metrics():
 
 app.include_router(router)
 
+def validate_production_settings():
+    """프로덕션 환경에서 필수 설정 검증"""
+    if settings.ENVIRONMENT == "production":
+        required_vars = [
+            ("MONGODB_URI", settings.MONGODB_URI),
+            ("JWT_SECRET_KEY", settings.JWT_SECRET_KEY),
+            ("HYPERCLOVA_API_KEY", settings.HYPERCLOVA_API_KEY),
+            ("PINECONE_API_KEY", settings.PINECONE_API_KEY),
+            ("SMTP_USER", settings.SMTP_USER),
+            ("SMTP_PASSWORD", settings.SMTP_PASSWORD),
+        ]
+        
+        missing_vars = []
+        for var_name, var_value in required_vars:
+            if not var_value or var_value in ["", "dev-jwt-secret-key-change-me", "your-secret-key-change-this-in-production"]:
+                missing_vars.append(var_name)
+        
+        if missing_vars:
+            error_msg = f"프로덕션 환경에서 필수 환경변수가 설정되지 않았습니다: {', '.join(missing_vars)}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
+        # JWT_SECRET_KEY가 기본값인지 확인
+        if settings.JWT_SECRET_KEY == "dev-jwt-secret-key-change-me":
+            logger.warning("JWT_SECRET_KEY가 기본값입니다. 프로덕션에서는 반드시 변경해야 합니다.")
+
 if __name__ == "__main__":
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
     logger.info(f"Debug mode: {settings.DEBUG}")
+    
+    # 프로덕션 환경 설정 검증
+    try:
+        validate_production_settings()
+    except ValueError as e:
+        logger.error(f"설정 검증 실패: {e}")
+        exit(1)
     
     uvicorn.run(
         app,

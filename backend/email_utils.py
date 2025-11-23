@@ -116,19 +116,19 @@ async def verify_token(token: str) -> Optional[str]:
         return None
 
 
-async def send_verification_email(email: str, token: str, frontend_url: str = "http://localhost:3000", is_password_reset: bool = False):
+async def send_verification_email(email: str, token: str, frontend_url: str = None, is_password_reset: bool = False):
     """
     이메일 인증 메일 발송
 
     Args:
         email: 수신자 이메일
         token: 인증 토큰
-        frontend_url: 프론트엔드 URL (기본값 사용 시 환경에 따라 자동 설정)
+        frontend_url: 프론트엔드 URL (None이면 환경변수 FRONTEND_URL 사용, 없으면 기본값)
         is_password_reset: 비밀번호 재설정 여부
     """
-    # 프로덕션 환경일 때 frontend_url 자동 설정
-    if settings.ENVIRONMENT == "production" and frontend_url == "http://localhost:3000":
-        frontend_url = "http://bu-chatbot.co.kr"
+    # frontend_url이 제공되지 않으면 환경변수에서 가져오기
+    if frontend_url is None:
+        frontend_url = settings.FRONTEND_URL
     
     # SMTP 설정
     smtp_server = "smtp.gmail.com"
@@ -187,7 +187,7 @@ async def send_verification_email(email: str, token: str, frontend_url: str = "h
               <p>{description}</p>
               {code_section}
               <div style="text-align: center; margin: 30px 0;">
-                <a href="{verification_link}"
+                <a href="{verification_link}" target="_self"
                    style="display: inline-block; padding: 12px 30px; background-color: #0066cc; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
                   {button_text}
                 </a>
