@@ -72,6 +72,26 @@ export const apiCall = async (endpoint, options = {}) => {
     console.error('에러 타입:', error.name);
     console.error('에러 메시지:', error.message);
     console.error('에러 전체:', error);
+    
+    // "Failed to fetch" 오류를 더 명확한 메시지로 변환
+    if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
+      const friendlyError = new Error(
+        '서버에 연결할 수 없습니다. 백엔드 서버가 실행 중인지 확인해주세요.\n' +
+        `(API URL: ${API_BASE_URL})`
+      );
+      friendlyError.name = 'NetworkError';
+      friendlyError.originalError = error;
+      throw friendlyError;
+    }
+    
+    // AbortError (타임아웃) 처리
+    if (error.name === 'AbortError') {
+      const timeoutError = new Error('요청 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.');
+      timeoutError.name = 'TimeoutError';
+      timeoutError.originalError = error;
+      throw timeoutError;
+    }
+    
     throw error;
   }
 };
