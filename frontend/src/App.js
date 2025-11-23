@@ -271,7 +271,7 @@ function MainApp() {
       });
 
       // 백엔드 API 호출
-      const response = await sendMessageAPI(conversationId, text.trim(), 3, true);
+      const response = await sendMessageAPI(conversationId, text.trim(), 5, true);
 
       // 봇 응답 추가
       const botMessage = {
