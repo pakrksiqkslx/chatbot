@@ -218,7 +218,7 @@ export const getMessages = async (conversationId) => {
 };
 
 // 메시지 전송
-export const sendMessage = async (conversationId, query, k = 3, includeSources = true) => {
+export const sendMessage = async (conversationId, query, k = 5, includeSources = true) => {
   const token = localStorage.getItem('access_token');
   const response = await apiCall('/conversations/chat', {
     method: 'POST',
