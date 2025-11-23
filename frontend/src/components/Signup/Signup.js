@@ -134,8 +134,24 @@ export default function Signup({ onSignup, onBack }) {
       return;
     }
     
-    if (password.length < 6) {
-      setError('비밀번호는 6자 이상이어야 합니다.');
+    if (password.length < 8) {
+      setError('비밀번호는 8자 이상이어야 합니다.');
+      return;
+    }
+
+    // 비밀번호 유효성 검증 (영문, 숫자, 특수문자)
+    if (!/[a-zA-Z]/.test(password)) {
+      setError('비밀번호는 영문을 포함해야 합니다.');
+      return;
+    }
+
+    if (!/\d/.test(password)) {
+      setError('비밀번호는 숫자를 포함해야 합니다.');
+      return;
+    }
+
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+      setError('비밀번호는 특수문자를 포함해야 합니다.');
       return;
     }
 
@@ -157,7 +173,12 @@ export default function Signup({ onSignup, onBack }) {
     } catch (error) {
       console.error('Signup failed:', error);
       
-      if (error.response?.data?.message) {
+      // 네트워크 오류 처리
+      if (error.name === 'NetworkError' || error.message.includes('서버에 연결할 수 없습니다')) {
+        setError('서버에 연결할 수 없습니다. 백엔드 서버가 실행 중인지 확인해주세요.');
+      } else if (error.name === 'TimeoutError' || error.message.includes('요청 시간이 초과')) {
+        setError('요청 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.');
+      } else if (error.response?.data?.message) {
         setError(error.response.data.message);
       } else if (error.message) {
         setError(error.message);
@@ -243,7 +264,7 @@ export default function Signup({ onSignup, onBack }) {
 
         <input
           type="password"
-          placeholder="비밀번호 (6자 이상)"
+          placeholder="비밀번호 (8자 이상, 영문+숫자+특수문자)"
           value={password}
           onChange={e => setPassword(e.target.value)}
           disabled={!isEmailVerified}

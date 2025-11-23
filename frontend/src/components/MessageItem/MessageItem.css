@@ -52,6 +52,11 @@
     word-break: break-all; /* 한글, 영어 모두 강제 줄바꿈 */
     max-width: 100%;
 }
+
+.cb-message-text strong {
+    font-weight: 600;
+    color: inherit;
+}
 .cb-message-time { 
     margin-top: 6px; 
     font-size: 12px; 

@@ -161,3 +161,11 @@
   font-size: 13px;
   text-align: center;
 }
+
+.password-hint {
+  color: #666;
+  font-size: 12px;
+  margin-top: -8px;
+  margin-bottom: 4px;
+  padding: 0 4px;
+}
