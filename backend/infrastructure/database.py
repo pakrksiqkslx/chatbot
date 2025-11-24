@@ -4,7 +4,7 @@ MongoDB Atlas (클라우드) 데이터베이스 연결 설정
 import logging
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import ConnectionFailure
-from config import settings
+from infrastructure.config import settings
 
 logger = logging.getLogger(__name__)
 

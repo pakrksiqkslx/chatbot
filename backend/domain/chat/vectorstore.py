@@ -20,7 +20,7 @@ except ImportError:
 from pinecone import Pinecone
 import json
 
-from config import settings
+from infrastructure.config import settings
 
 logger = logging.getLogger(__name__)
 

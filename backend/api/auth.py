@@ -6,15 +6,15 @@ from datetime import datetime, timedelta
 from bson import ObjectId
 import logging
 
-from models.user import (
+from domain.auth.model import (
     UserSignup, UserLogin, UserResponse,
     EmailVerificationRequest, EmailVerificationConfirm,
     PasswordResetRequest, PasswordResetConfirm
 )
-from database import Collections, db_instance
-from auth_utils import hash_password, verify_password, create_access_token
-from config import settings
-from email_utils import generate_verification_token, generate_password_reset_code, save_verification_token, verify_token, send_verification_email
+from infrastructure.database import Collections, db_instance
+from domain.auth.utils import hash_password, verify_password, create_access_token
+from infrastructure.config import settings
+from domain.auth.email import generate_verification_code, generate_password_reset_code, save_verification_token, verify_token, verify_code, send_verification_email
 
 logger = logging.getLogger(__name__)
 
@@ -55,14 +55,14 @@ async def send_verification_email_endpoint(request: EmailVerificationRequest):
                 }
             )
 
-        # 2. 인증 토큰 생성
-        token = generate_verification_token()
+        # 2. 인증 코드 생성 (6자리 숫자)
+        code = generate_verification_code()
 
-        # 3. 토큰 저장
-        await save_verification_token(request.email, token, expires_minutes=30)
+        # 3. 코드 저장
+        await save_verification_token(request.email, code, expires_minutes=30)
 
         # 4. 이메일 발송
-        await send_verification_email(request.email, token)
+        await send_verification_email(request.email, code)
 
         logger.info(f"이메일 인증 요청: {request.email}")
 
@@ -98,38 +98,39 @@ async def send_verification_email_endpoint(request: EmailVerificationRequest):
     response_model=dict,
     status_code=status.HTTP_200_OK,
     summary="이메일 인증 확인",
-    description="이메일로 받은 인증 토큰을 확인합니다."
+    description="이메일로 받은 인증 코드를 확인합니다."
 )
 async def verify_email_endpoint(request: EmailVerificationConfirm):
     """
     이메일 인증 확인 엔드포인트
 
-    - **token**: 이메일로 받은 인증 토큰
+    - **email**: 인증할 이메일
+    - **code**: 이메일로 받은 인증 코드 (6자리 숫자)
     """
     try:
-        # 1. 토큰 검증
-        email = await verify_token(request.token)
+        # 1. 코드 검증
+        is_verified = await verify_code(request.email, request.code)
 
-        if not email:
+        if not is_verified:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
                     "success": False,
                     "error": {
-                        "code": "INVALID_TOKEN",
-                        "message": "유효하지 않거나 만료된 인증 토큰입니다",
-                        "details": "인증 링크를 다시 확인하거나 새로운 인증 이메일을 요청해주세요"
+                        "code": "INVALID_CODE",
+                        "message": "유효하지 않거나 만료된 인증 코드입니다",
+                        "details": "인증 코드를 다시 확인하거나 새로운 인증 이메일을 요청해주세요"
                     }
                 }
             )
 
-        logger.info(f"이메일 인증 완료: {email}")
+        logger.info(f"이메일 인증 완료: {request.email}")
 
         return {
             "success": True,
             "message": "이메일 인증이 완료되었습니다. 회원가입을 진행해주세요.",
             "data": {
-                "email": email,
+                "email": request.email,
                 "verified": True
             }
         }
@@ -171,10 +172,14 @@ async def signup(user_data: UserSignup):
         users_collection = db_instance.get_collection(Collections.USERS)
         verification_collection = db_instance.get_collection(Collections.EMAIL_VERIFICATIONS)
 
-        # 1.5. 이메일 인증 여부 확인
+        # 1.5. 이메일 인증 여부 확인 (type이 없거나 'email_verification'인 경우)
         verification = await verification_collection.find_one({
             "email": user_data.email,
-            "verified": True
+            "verified": True,
+            "$or": [
+                {"type": {"$exists": False}},
+                {"type": "email_verification"}
+            ]
         })
 
         if not verification:

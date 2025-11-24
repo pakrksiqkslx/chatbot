@@ -8,15 +8,20 @@ from datetime import datetime, timedelta
 import secrets
 import logging
 from typing import Optional
-from config import settings
-from database import Collections, db_instance
+from infrastructure.config import settings
+from infrastructure.database import Collections, db_instance
 
 logger = logging.getLogger(__name__)
 
 
 def generate_verification_token() -> str:
-    """이메일 인증 토큰 생성 (32자리 랜덤 문자열)"""
+    """이메일 인증 토큰 생성 (32자리 랜덤 문자열) - 사용 안 함 (레거시)"""
     return secrets.token_urlsafe(32)
+
+
+def generate_verification_code() -> str:
+    """이메일 인증용 6자리 숫자 코드 생성"""
+    return ''.join([str(secrets.randbelow(10)) for _ in range(6)])
 
 
 def generate_password_reset_code() -> str:
@@ -26,26 +31,33 @@ def generate_password_reset_code() -> str:
 
 async def save_verification_token(email: str, token: str, expires_minutes: int = 30):
     """
-    이메일 인증 토큰을 데이터베이스에 저장
+    이메일 인증 토큰/코드를 데이터베이스에 저장
 
     Args:
         email: 이메일 주소
-        token: 인증 토큰
+        token: 인증 토큰 또는 코드
         expires_minutes: 토큰 만료 시간 (분)
     """
     try:
         verification_collection = db_instance.get_collection(Collections.EMAIL_VERIFICATIONS)
 
-        # 기존 토큰 삭제
-        deleted = await verification_collection.delete_many({"email": email})
+        # 기존 토큰/코드 삭제 (이메일 인증 타입만)
+        deleted = await verification_collection.delete_many({
+            "email": email,
+            "$or": [
+                {"type": {"$exists": False}},
+                {"type": "email_verification"}
+            ]
+        })
         if deleted.deleted_count > 0:
-            logger.info(f"기존 토큰 {deleted.deleted_count}개 삭제: {email}")
+            logger.info(f"기존 토큰/코드 {deleted.deleted_count}개 삭제: {email}")
 
-        # 새 토큰 저장
+        # 새 토큰/코드 저장
         expires_at = datetime.utcnow() + timedelta(minutes=expires_minutes)
         verification_doc = {
             "email": email,
             "token": token,
+            "type": "email_verification",  # 이메일 인증 타입 명시
             "expires_at": expires_at,
             "created_at": datetime.utcnow(),
             "verified": False
@@ -64,7 +76,7 @@ async def save_verification_token(email: str, token: str, expires_minutes: int =
 
 async def verify_token(token: str) -> Optional[str]:
     """
-    토큰을 검증하고 이메일 주소를 반환
+    토큰을 검증하고 이메일 주소를 반환 (레거시 - 토큰 방식)
 
     Args:
         token: 인증 토큰
@@ -116,19 +128,80 @@ async def verify_token(token: str) -> Optional[str]:
         return None
 
 
+async def verify_code(email: str, code: str) -> bool:
+    """
+    이메일 인증 코드를 검증
+
+    Args:
+        email: 이메일 주소
+        code: 인증 코드 (6자리 숫자)
+
+    Returns:
+        검증 성공 여부
+    """
+    try:
+        verification_collection = db_instance.get_collection(Collections.EMAIL_VERIFICATIONS)
+
+        logger.info(f"코드 검증 시도: {email}, 코드: {code}")
+
+        # 코드 조회 (type이 없거나 'email_verification'인 경우)
+        verification = await verification_collection.find_one({
+            "email": email,
+            "token": code,
+            "$or": [
+                {"type": {"$exists": False}},
+                {"type": "email_verification"}
+            ]
+        })
+
+        if not verification:
+            logger.warning(f"코드를 찾을 수 없음: {email}, 코드: {code}")
+            return False
+
+        logger.info(f"코드 찾음: {verification['email']}, verified={verification.get('verified', False)}")
+
+        # 이미 검증된 코드인지 확인
+        if verification.get("verified", False):
+            logger.info(f"이미 인증된 코드입니다: {verification['email']}")
+            return True
+
+        # 만료 확인
+        if verification["expires_at"] < datetime.utcnow():
+            logger.warning(f"만료된 코드: {email} (만료: {verification['expires_at']})")
+            return False
+
+        # 코드 검증 완료 처리
+        await verification_collection.update_one(
+            {"_id": verification["_id"]},
+            {"$set": {"verified": True, "verified_at": datetime.utcnow()}}
+        )
+
+        logger.info(f"✓ 이메일 인증 성공: {verification['email']}")
+        return True
+
+    except Exception as e:
+        logger.error(f"코드 검증 중 오류: {e}", exc_info=True)
+        return False
+
+
 async def send_verification_email(email: str, token: str, frontend_url: str = None, is_password_reset: bool = False):
     """
     이메일 인증 메일 발송
 
     Args:
         email: 수신자 이메일
-        token: 인증 토큰
+        token: 인증 토큰 또는 코드 (6자리 숫자)
         frontend_url: 프론트엔드 URL (None이면 환경변수 FRONTEND_URL 사용, 없으면 기본값)
         is_password_reset: 비밀번호 재설정 여부
     """
-    # frontend_url이 제공되지 않으면 환경변수에서 가져오기
+    # frontend_url이 제공되지 않으면 환경에 따라 설정
     if frontend_url is None:
-        frontend_url = settings.FRONTEND_URL
+        # production 환경에서는 이메일 링크만 도메인 사용
+        if settings.ENVIRONMENT == "production":
+            frontend_url = "https://bu-chatbot.co.kr"
+        else:
+            # development 환경에서는 localhost 사용
+            frontend_url = "http://localhost:3000"
     
     # SMTP 설정
     smtp_server = "smtp.gmail.com"
@@ -168,10 +241,16 @@ async def send_verification_email(email: str, token: str, frontend_url: str = No
         else:
             msg['Subject'] = '[백석대학교 수업계획서 챗봇] 이메일 인증'
             title = "이메일 인증"
-            description = "회원가입을 완료하기 위해 아래 버튼을 클릭하여 이메일을 인증해주세요."
-            button_text = "이메일 인증하기"
-            verification_link = f"{frontend_url}/verify-email?token={token}"
-            code_section = ""
+            description = "회원가입을 완료하기 위해 아래 6자리 인증 코드를 입력해주세요."
+            button_text = ""
+            verification_link = ""
+            code_section = f"""
+              <div style="background-color: #f5f5f5; padding: 20px; margin: 20px 0; border-radius: 5px; text-align: center;">
+                <p style="margin: 0; color: #666; font-size: 14px;">인증 코드 (6자리)</p>
+                <h1 style="margin: 10px 0; color: #0066cc; letter-spacing: 10px; font-size: 36px;">{token}</h1>
+                <p style="margin: 5px 0; color: #999; font-size: 12px;">이 코드는 30분 동안 유효합니다</p>
+              </div>
+            """
 
         msg['From'] = smtp_user
         msg['To'] = email
@@ -186,6 +265,7 @@ async def send_verification_email(email: str, token: str, frontend_url: str = No
               <p>안녕하세요,</p>
               <p>{description}</p>
               {code_section}
+              {f'''
               <div style="text-align: center; margin: 30px 0;">
                 <a href="{verification_link}" target="_self"
                    style="display: inline-block; padding: 12px 30px; background-color: #0066cc; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
@@ -199,6 +279,7 @@ async def send_verification_email(email: str, token: str, frontend_url: str = No
               <p style="word-break: break-all; color: #0066cc; font-size: 12px;">
                 {verification_link}
               </p>
+              ''' if verification_link else ''}
               <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
               <p style="color: #999; font-size: 12px;">
                 본인이 요청하지 않았다면 이 메일을 무시하셔도 됩니다.
@@ -216,11 +297,11 @@ async def send_verification_email(email: str, token: str, frontend_url: str = No
 
         {description}
 
-        {"인증 코드 (6자리): " + token if is_password_reset else ""}
+        인증 코드 (6자리): {token}
 
-        인증 링크: {verification_link}
+        {f"인증 링크: {verification_link}" if verification_link else ""}
 
-        이 코드/링크는 30분 동안 유효합니다.
+        이 코드는 30분 동안 유효합니다.
 
         본인이 요청하지 않았다면 이 메일을 무시하셔도 됩니다.
         """

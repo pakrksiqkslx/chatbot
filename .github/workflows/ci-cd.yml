@@ -180,67 +180,6 @@ jobs:
           role-to-assume: ${{ secrets.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Fetch all SSM Parameters
-        id: fetch-ssm
-        run: |
-          # SSM Parameter Store에서 가져올 파라미터 이름 목록을 준비
-          # 멀티라인 문자열을 배열로 변환
-          SSM_KEYS_STR="${{ env.SSM_KEYS }}"
-          
-          # 파라미터 전체 경로 배열 생성
-          PARAM_PATHS=()
-          while IFS= read -r KEY; do
-            [ -z "$KEY" ] && continue
-            
-            KEY=$(echo "$KEY" | xargs)
-            [ -z "$KEY" ] && continue
-            
-            # 환경 변수에서 SSM 경로 가져오기
-            ENV_VAR_NAME="SSM_${KEY}"
-            PATH_VAR=$(printenv "${ENV_VAR_NAME}" || echo "")
-            if [ -z "$PATH_VAR" ]; then
-              # 기본 경로 형식 사용
-              PATH_VAR="/prod/${KEY}"
-            fi
-            PARAM_PATHS+=("$PATH_VAR")
-            echo "Added parameter path: $PATH_VAR (from key: $KEY)"
-          done <<< "$SSM_KEYS_STR"
-          
-          # AWS SSM API 호출 횟수를 줄이기 위해 모든 파라미터를 한 번에 가져옴
-          echo "Fetching SSM parameters: ${PARAM_PATHS[*]}"
-          
-          SSM_OUTPUT=$(aws ssm get-parameters \
-            --names "${PARAM_PATHS[@]}" \
-            --with-decryption \
-            --region ${{ env.AWS_REGION }} \
-            --query "Parameters[*]" \
-            --output json)
-
-          if [ $? -ne 0 ]; then
-            echo "❌ Error: Failed to fetch parameters from SSM Parameter Store."
-            echo "IAM Role (ARN: ${{ secrets.ROLE_ARN }})에 'ssm:GetParameters' 및 KMS Decrypt 권한이 있는지 확인하세요."
-            exit 1
-          fi
-
-          # 파라미터 값들을 환경 변수로 내보내기 위해 GITHUB_OUTPUT에 설정
-          # jq를 사용하여 각 파라미터를 처리
-          echo "$SSM_OUTPUT" | jq -c '.[]' | while read -r param; do
-            NAME_WITH_PATH=$(echo "$param" | jq -r '.Name')
-            VALUE=$(echo "$param" | jq -r '.Value')
-            
-            # 파라미터 이름에서 경로('/prod/')를 제거하고 환경 변수 이름만 추출
-            ENV_KEY=$(echo "$NAME_WITH_PATH" | sed 's|^/prod/||')
-            
-            # GITHUB_OUTPUT에 추가 (멀티라인 값 지원을 위해 delimiter 사용)
-            {
-              echo "${ENV_KEY}<<EOF"
-              echo "$VALUE"
-              echo "EOF"
-            } >> $GITHUB_OUTPUT
-            echo "✅ Successfully fetched ${ENV_KEY}"
-          done
-
-
       - name: Update ECS Task Definition (Both Containers)
         id: update-task
         env:
@@ -248,17 +187,6 @@ jobs:
           IMAGE_BACKEND: ${{ needs.build-and-push.outputs.backend_image_uri }}
           CONTAINER_FRONTEND: ${{ env.CONTAINER_FRONTEND_NAME }}
           CONTAINER_BACKEND: ${{ env.CONTAINER_BACKEND_NAME }}
-          # SSM에서 가져온 파라미터들을 환경 변수로 로드
-          REACT_APP_API_URL: ${{ steps.fetch-ssm.outputs.REACT_APP_API_URL }}
-          HYPERCLOVA_API_KEY: ${{ steps.fetch-ssm.outputs.HYPERCLOVA_API_KEY }}
-          PINECONE_API_KEY: ${{ steps.fetch-ssm.outputs.PINECONE_API_KEY }}
-          PINECONE_INDEX_NAME: ${{ steps.fetch-ssm.outputs.PINECONE_INDEX_NAME }}
-          MONGODB_URI: ${{ steps.fetch-ssm.outputs.MONGODB_URI }}
-          MONGODB_DATABASE: ${{ steps.fetch-ssm.outputs.MONGODB_DATABASE }}
-          JWT_SECRET_KEY: ${{ steps.fetch-ssm.outputs.JWT_SECRET_KEY }}
-          JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${{ steps.fetch-ssm.outputs.JWT_ACCESS_TOKEN_EXPIRE_MINUTES }}
-          SMTP_USER: ${{ steps.fetch-ssm.outputs.SMTP_USER }}
-          SMTP_PASSWORD: ${{ steps.fetch-ssm.outputs.SMTP_PASSWORD }}
         run: |
           # 필수 변수 확인
           if [ -z "$IMAGE_FRONTEND" ] || [ -z "$IMAGE_BACKEND" ]; then
@@ -280,43 +208,17 @@ jobs:
 
           echo "Task definition fetched successfully"
           
-          # jq를 사용하여 이미지 URI와 환경 변수 업데이트
+          # jq를 사용하여 이미지 URI만 업데이트
+          # secrets는 기존 Task Definition에서 그대로 유지됨
           NEW_TASK_DEF=$(echo "$TASK_DEF_JSON" | jq \
             --arg IMAGE_FRONTEND "$IMAGE_FRONTEND" \
             --arg IMAGE_BACKEND "$IMAGE_BACKEND" \
             --arg CONTAINER_FRONTEND "$CONTAINER_FRONTEND" \
             --arg CONTAINER_BACKEND "$CONTAINER_BACKEND" \
-            --arg REACT_APP_API_URL "$REACT_APP_API_URL" \
-            --arg HYPERCLOVA_API_KEY "$HYPERCLOVA_API_KEY" \
-            --arg PINECONE_API_KEY "$PINECONE_API_KEY" \
-            --arg PINECONE_INDEX_NAME "$PINECONE_INDEX_NAME" \
-            --arg MONGODB_URI "$MONGODB_URI" \
-            --arg MONGODB_DATABASE "$MONGODB_DATABASE" \
-            --arg JWT_SECRET_KEY "$JWT_SECRET_KEY" \
-            --arg JWT_ACCESS_TOKEN_EXPIRE_MINUTES "$JWT_ACCESS_TOKEN_EXPIRE_MINUTES" \
-            --arg SMTP_USER "$SMTP_USER" \
-            --arg SMTP_PASSWORD "$SMTP_PASSWORD" \
             '
-            def set_env(container_name; key; value):
-              (.containerDefinitions[] | select(.name == container_name)).environment =
-                (
-                  (.containerDefinitions[] | select(.name == container_name) | .environment // [])
-                  | map(select(.name != key))
-                  | . + [{name: key, value: value}]
-                );
-
+            # 이미지 URI만 업데이트, 나머지는 기존 값 유지
             (.containerDefinitions[] | select(.name == $CONTAINER_FRONTEND)).image = $IMAGE_FRONTEND |
             (.containerDefinitions[] | select(.name == $CONTAINER_BACKEND)).image = $IMAGE_BACKEND |
-            set_env($CONTAINER_FRONTEND; "REACT_APP_API_URL"; $REACT_APP_API_URL) |
-            set_env($CONTAINER_BACKEND; "HYPERCLOVA_API_KEY"; $HYPERCLOVA_API_KEY) |
-            set_env($CONTAINER_BACKEND; "PINECONE_API_KEY"; $PINECONE_API_KEY) |
-            set_env($CONTAINER_BACKEND; "PINECONE_INDEX_NAME"; $PINECONE_INDEX_NAME) |
-            set_env($CONTAINER_BACKEND; "MONGODB_URI"; $MONGODB_URI) |
-            set_env($CONTAINER_BACKEND; "MONGODB_DATABASE"; $MONGODB_DATABASE) |
-            set_env($CONTAINER_BACKEND; "JWT_SECRET_KEY"; $JWT_SECRET_KEY) |
-            set_env($CONTAINER_BACKEND; "JWT_ACCESS_TOKEN_EXPIRE_MINUTES"; $JWT_ACCESS_TOKEN_EXPIRE_MINUTES) |
-            set_env($CONTAINER_BACKEND; "SMTP_USER"; $SMTP_USER) |
-            set_env($CONTAINER_BACKEND; "SMTP_PASSWORD"; $SMTP_PASSWORD) |
             {
               family: .family,
               taskRoleArn: (if .taskRoleArn == null then empty else .taskRoleArn end),
