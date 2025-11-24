@@ -29,7 +29,7 @@ def test_imports():
 
 def test_settings_basic():
     """설정 기본값 확인"""
-    from config import settings
+    from infrastructure.config import settings
     
     assert hasattr(settings, 'APP_NAME')
     assert hasattr(settings, 'APP_VERSION')
@@ -105,7 +105,7 @@ def test_health_endpoint_structure():
 
 def test_chat_request_model():
     """ChatRequest 모델이 정상적으로 작동하는지 확인"""
-    from main import ChatRequest
+    from domain.conversations.model import ChatRequest
     
     # 기본 필드 확인
     request = ChatRequest(query="테스트 질문")
@@ -123,7 +123,7 @@ def test_chat_request_model():
 
 def test_chat_response_model():
     """ChatResponse 모델이 정상적으로 작동하는지 확인"""
-    from main import ChatResponse
+    from domain.conversations.model import ChatResponse
     
     response = ChatResponse(answer="테스트 답변", sources=[], message_id="test_msg_id")
     assert response.answer == "테스트 답변"
