@@ -116,7 +116,7 @@ jobs:
       - name: Test import validation
         run: |
           cd backend
-          python -c "from config import settings; print(f'✅ Config loaded: {settings.APP_NAME}')"
+          python -c "from infrastructure.config import settings; print(f'✅ Config loaded: {settings.APP_NAME}')"
           python -c "from main import app; print(f'✅ App created: {app.title}')"
 
   build-and-push:
