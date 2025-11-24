@@ -3,8 +3,8 @@
 """
 import logging
 from bson import ObjectId
-from database import Collections, db_instance
-from hyperclova_client import get_hyperclova_client
+from infrastructure.database import Collections, db_instance
+from domain.chat.client import get_hyperclova_client
 
 logger = logging.getLogger(__name__)
 

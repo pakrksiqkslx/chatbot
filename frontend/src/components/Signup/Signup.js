@@ -80,12 +80,14 @@ export default function Signup({ onSignup, onBack }) {
 
     try {
       // 실제 API 호출
-      // 서버는 이메일에 클릭용 링크를 포함하여 전송해야 합니다.
-      // 예: https://your-frontend/verify-email?token=... 형태
+      // 서버는 이메일에 6자리 인증번호를 포함하여 전송합니다.
       await authAPI.sendVerificationEmail(fullEmail);
-      alert(`${fullEmail}로 인증 메일을 발송했습니다. 메일의 버튼을 눌러 인증을 완료하세요.`);
+      alert(`${fullEmail}로 인증 메일을 발송했습니다. 메일의 6자리 인증번호를 입력해주세요.`);
       
-      // 개발 모드에서는 디버깅용 로그만 출력 (백엔드가 토큰과 이메일을 반환하지 않는다고 가정)
+      // 인증번호 입력 UI 표시를 위해 sentCode 설정 (실제 코드는 이메일에서 확인)
+      setSentCode('sent'); // 플래그로 사용
+      
+      // 개발 모드에서는 디버깅용 로그만 출력
       if (process.env.NODE_ENV === 'development') {
         console.log('개발 모드: 인증 이메일 발송 호출 완료');
       }
@@ -296,14 +298,18 @@ export default function Signup({ onSignup, onBack }) {
               type="text"
               placeholder="인증번호 6자리"
               value={verificationCode}
-              onChange={e => setVerificationCode(e.target.value)}
+              onChange={e => {
+                // 숫자만 입력 허용
+                const value = e.target.value.replace(/[^0-9]/g, '');
+                setVerificationCode(value);
+              }}
               maxLength="6"
               className="verification-input"
             />
             <button
               type="button"
               onClick={handleVerifyCode}
-              disabled={!verificationCode.trim()}
+              disabled={!verificationCode.trim() || verificationCode.length !== 6}
               className="verify-code-btn"
             >
               인증확인

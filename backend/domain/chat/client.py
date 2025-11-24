@@ -6,7 +6,7 @@ import json
 import logging
 import asyncio
 from typing import List, Dict, Any, Optional
-from config import settings
+from infrastructure.config import settings
 
 logger = logging.getLogger(__name__)
 

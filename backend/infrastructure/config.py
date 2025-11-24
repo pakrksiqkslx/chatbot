@@ -8,8 +8,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # .env 파일 로드 (backend/.env 또는 프로젝트 루트의 .env)
-backend_env = Path(__file__).parent / ".env"
-root_env = Path(__file__).parent.parent / ".env"
+backend_env = Path(__file__).parent.parent / ".env"
+root_env = Path(__file__).parent.parent.parent / ".env"
 
 if backend_env.exists():
     try:
@@ -79,7 +79,8 @@ class Settings:
     SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
     
     # 프론트엔드 URL 설정 (이메일 인증 링크용)
-    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    # 기본값은 __init__에서 환경에 따라 설정됨
+    FRONTEND_URL: str = ""
     
     # 외부 API 설정 - HyperCLOVA X
     HYPERCLOVA_API_KEY: str = os.getenv("HYPERCLOVA_API_KEY", "")
@@ -104,6 +105,15 @@ class Settings:
         # 개발에서 모든 오리진 허용 옵션 처리
         if not self.ENVIRONMENT == "production" and self.ALLOW_ALL_ORIGINS_IN_DEV:
             self.ALLOWED_ORIGINS = ["*"]
+        
+        # FRONTEND_URL 설정 (다른 용도로 사용될 수 있으므로 기본값은 localhost)
+        # 이메일 인증 링크는 email_utils.py에서 production 환경일 때만 도메인 사용
+        env_frontend_url = os.getenv("FRONTEND_URL")
+        if env_frontend_url:
+            self.FRONTEND_URL = env_frontend_url
+        else:
+            # 기본값은 localhost (이메일 링크는 email_utils.py에서 별도 처리)
+            self.FRONTEND_URL = "http://localhost:3000"
     
     # 모니터링 설정
     ENABLE_METRICS: bool = os.getenv("ENABLE_METRICS", "true").lower() == "true"

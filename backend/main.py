@@ -1,21 +1,19 @@
-from fastapi import FastAPI, HTTPException, APIRouter, Request, Depends
+"""
+FastAPI 애플리케이션 진입점
+"""
+from fastapi import FastAPI, APIRouter, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.exceptions import RequestValidationError
-from pydantic import BaseModel
-from typing import Optional
-from datetime import datetime
-from bson import ObjectId
 import uvicorn
 import logging
-from config import settings
-from direct_pinecone_service import get_vectorstore_service
-from hyperclova_client import get_hyperclova_client
-from database import db_instance, Collections
-from routers import auth, conversations
-from routers.conversations import ChatRequest, ChatResponse
-from auth_utils import get_current_user
+import os
+
+from infrastructure.config import settings
+from infrastructure.database import db_instance
+from domain.chat.vectorstore import get_vectorstore_service
+from api import auth, conversations
 
 # 로깅 설정
 logging.basicConfig(
@@ -35,23 +33,7 @@ app = FastAPI(
     redoc_url=(f"{settings.API_PREFIX}{settings.REDOC_URL}" if settings.ENABLE_DOCS else None),
 )
 
-# 보안 미들웨어 설정
-if settings.ENVIRONMENT == "production":
-    # 기본 허용 호스트(프로덕션 도메인)
-    allowed_hosts = ["*.bu-chatbot.co.kr"]
-
-    # 내부 테스트/헬스체크 용도로 로컬호스트를 허용하려면
-    # 환경변수 ALLOW_LOCALHOST_IN_PROD=true 로 켜십시오.
-    import os
-    if os.getenv("ALLOW_LOCALHOST_IN_PROD", "false").lower() in ("1", "true", "yes"):
-        allowed_hosts += ["localhost", "127.0.0.1"]
-
-    app.add_middleware(
-        TrustedHostMiddleware,
-        allowed_hosts=allowed_hosts
-    )
-
-# CORS middleware 설정
+# CORS middleware 설정 (먼저 추가 - 역순 실행이므로 나중에 실행됨)
 if settings.ALLOWED_ORIGINS == ["*"]:
     app.add_middleware(
         CORSMiddleware,
@@ -68,6 +50,18 @@ else:
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["*"],
     )
+
+# 보안 미들웨어 설정 (나중에 추가 - 먼저 실행됨)
+# TrustedHostMiddleware는 개발 환경에서는 비활성화 (OPTIONS 요청 문제 방지)
+if settings.ENVIRONMENT == "production":
+    allowed_hosts = ["*.bu-chatbot.co.kr"]
+    
+    # 내부 테스트/헬스체크 용도로 로컬호스트를 허용하려면
+    # 환경변수 ALLOW_LOCALHOST_IN_PROD=true 로 켜십시오.
+    if os.getenv("ALLOW_LOCALHOST_IN_PROD", "false").lower() in ("1", "true", "yes"):
+        allowed_hosts += ["localhost", "127.0.0.1"]
+    
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
 
 router = APIRouter(prefix=settings.API_PREFIX)
 
@@ -95,14 +89,15 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         content={"detail": errors}
     )
 
-# 라우터 등록
+# API 라우터 등록
 app.include_router(auth.router, prefix=settings.API_PREFIX)
 app.include_router(conversations.router, prefix=settings.API_PREFIX)
+app.include_router(router)
 
 # MongoDB 연결 이벤트
 @app.on_event("startup")
-async def startup_db_client():
-    """앱 시작 시 MongoDB 연결 및 설정 검증"""
+async def startup_event():
+    """애플리케이션 시작 시 초기화"""
     # 프로덕션 환경 설정 검증
     if settings.ENVIRONMENT == "production":
         validate_production_settings()
@@ -114,10 +109,8 @@ async def startup_db_client():
     except Exception as e:
         logger.error(f"MongoDB 연결 실패: {e}")
         if settings.ENVIRONMENT == "production":
-            # 프로덕션에서는 MongoDB 연결 실패 시 앱 시작 중단
             raise
         else:
-            # 개발 환경에서는 경고만 출력하고 계속 진행
             logger.warning("개발 환경: MongoDB 연결 실패했지만 앱은 계속 실행됩니다.")
 
 
@@ -207,9 +200,6 @@ async def metrics():
         "debug": settings.DEBUG,
         "log_level": settings.LOG_LEVEL
     }
-
-
-app.include_router(router)
 
 def validate_production_settings():
     """프로덕션 환경에서 필수 설정 검증"""

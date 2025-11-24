@@ -109,12 +109,24 @@ class EmailVerificationRequest(BaseModel):
 
 class EmailVerificationConfirm(BaseModel):
     """이메일 인증 확인 모델"""
-    token: str = Field(..., description="인증 토큰")
+    email: EmailStr = Field(..., description="인증할 이메일")
+    code: str = Field(..., min_length=6, max_length=6, description="인증 코드 (6자리 숫자)")
+
+    @field_validator('code')
+    @classmethod
+    def validate_code(cls, v):
+        """인증 코드 검증 (6자리 숫자만 허용)"""
+        if not v.isdigit():
+            raise ValueError('인증 코드는 숫자만 입력 가능합니다')
+        if len(v) != 6:
+            raise ValueError('인증 코드는 6자리여야 합니다')
+        return v
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "token": "abc123xyz..."
+                "email": "student@bu.ac.kr",
+                "code": "123456"
             }
         }
     )
