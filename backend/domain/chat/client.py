@@ -7,6 +7,11 @@ import logging
 import asyncio
 from typing import List, Dict, Any, Optional
 from infrastructure.config import settings
+from .prompts import (
+    get_intent_classification_prompt,
+    get_course_answer_prompt,
+    get_casual_answer_prompt
+)
 
 logger = logging.getLogger(__name__)
 
@@ -209,19 +214,7 @@ class HyperCLOVAClient:
         Returns:
             'course_related' 또는 'casual_chat'
         """
-        system_prompt = """당신은 사용자 질문을 분류하는 AI입니다.
-                        사용자의 질문을 다음 2가지로만 분류해주세요:
-
-                        1. course_related: 수업계획서와 관련된 모든 질문
-                        예시: "임석구 교수님", "임석구 교수님 연락처", "C언어프로그래밍 교수님", 
-                                "데이터베이스 과제", "웹프로그래밍 수업시간", "캡스톤디자인 수업계획"
-
-                        2. casual_chat: 일상 대화
-                        예시: "안녕", "고마워", "날씨", "시간", "뭐해?"
-
-                        답변은 반드시 다음 중 하나만 출력하세요:
-                        - course_related (수업계획서 관련)
-                        - casual_chat (일상 대화)"""
+        system_prompt = get_intent_classification_prompt()
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -280,31 +273,55 @@ class HyperCLOVAClient:
         Returns:
             생성된 답변 텍스트
         """
-        # 기본 시스템 프롬프트 (개선된 버전)
+        # 기본 시스템 프롬프트 (프롬프트 파일에서 로드)
         if system_prompt is None:
-            system_prompt = """당신은 대학교 수업계획서 기반 챗봇입니다.
-                            제공된 수업계획서 정보를 바탕으로 학생들의 질문에 정확하고 도움이 되는 답변을 제공하세요.
+            system_prompt = get_course_answer_prompt()
 
-                            답변 원칙:
-                            1. 제공된 수업계획서 정보만을 바탕으로 답변
-                            2. 질문의 의도를 정확히 파악하여 적절한 형태로 답변
-                            3. 교수님 이름만 물어보면 해당 교수님의 모든 수업 목록을 보여주기
-                            4. 연락처를 물어보면 교수님의 연락처 정보를 제공하기
-                            5. 구체적인 수업을 물어보면 해당 수업의 상세 정보를 제공하기
-                            6. 친근하고 도움이 되는 톤으로 답변
-                            7. 정보가 부족하면 솔직하게 말하기
-                            8. 이전 대화 내용을 참고하여 맥락에 맞는 답변 제공
-
-                            답변 형태 예시:
-                            - 교수님 이름만 물어본 경우: "○○ 교수님의 수업은 다음과 같습니다: 1. 강의A 2. 강의B ..."
-                            - 연락처를 물어본 경우: "○○ 교수님의 연락처는 010-xxxx-xxxx입니다."
-                            - 구체적 수업을 물어본 경우: 해당 수업의 상세 정보 제공"""
-
-        # 컨텍스트 구성
-        context_text = "\n\n".join([
-            f"[관련 정보 {i+1}]\n{doc.get('content', doc.get('page_content', ''))}"
-            for i, doc in enumerate(context_docs)
-        ])
+        # 컨텍스트 구성 (교과목 운영 섹션 우선 배치)
+        # 담당교수 관련 질문인 경우 "교과목 운영" 섹션을 우선적으로 배치
+        is_professor_question = any(keyword in query for keyword in ['담당교수', '교수님', '교수', '선생님', '담당'])
+        
+        # 문서를 섹션별로 분류
+        operation_docs = []  # 교과목 운영 섹션
+        other_docs = []  # 기타 섹션
+        
+        for doc in context_docs:
+            metadata = doc.get('metadata', {})
+            section = metadata.get('section', '')
+            
+            if section == '교과목 운영':
+                operation_docs.append(doc)
+            else:
+                other_docs.append(doc)
+        
+        # 담당교수 관련 질문이면 교과목 운영 문서를 먼저 배치
+        if is_professor_question and operation_docs:
+            sorted_docs = operation_docs + other_docs
+        else:
+            sorted_docs = context_docs
+        
+        # 컨텍스트 텍스트 구성 (섹션 정보 포함)
+        context_parts = []
+        for i, doc in enumerate(sorted_docs):
+            metadata = doc.get('metadata', {})
+            section = metadata.get('section', '')
+            course_name = metadata.get('course_name', '')
+            professor = metadata.get('professor', '')
+            
+            content = doc.get('content', doc.get('page_content', ''))
+            
+            # 섹션 정보를 명시적으로 포함
+            section_info = f"[섹션: {section}]" if section else ""
+            course_info = f"[강의명: {course_name}]" if course_name else ""
+            prof_info = f"[담당교수: {professor}]" if professor else ""
+            
+            header = " ".join(filter(None, [section_info, course_info, prof_info]))
+            if header:
+                context_parts.append(f"[관련 정보 {i+1}] {header}\n{content}")
+            else:
+                context_parts.append(f"[관련 정보 {i+1}]\n{content}")
+        
+        context_text = "\n\n".join(context_parts)
         
         # 메시지 구성 (시스템 프롬프트 + 이전 대화 히스토리 + 현재 질문)
         messages = [{"role": "system", "content": system_prompt}]
@@ -382,14 +399,7 @@ class HyperCLOVAClient:
         Returns:
             생성된 답변 텍스트
         """
-        system_prompt = """당신은 친근하고 도움이 되는 대학교 수업 안내 챗봇입니다.
-                        학생들과 자연스럽게 대화하며, 필요한 경우 수업계획서 관련 질문을 하도록 안내해주세요.
-
-                        답변 원칙:
-                        1. 친근하고 자연스러운 한국어로 답변
-                        2. 간단명료하게 답변
-                        3. 수업 관련 질문이 있다면 구체적으로 물어보도록 유도
-                        4. 이전 대화 내용을 참고하여 맥락에 맞는 답변 제공"""
+        system_prompt = get_casual_answer_prompt()
 
         messages = [{"role": "system", "content": system_prompt}]
         
