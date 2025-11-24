@@ -48,14 +48,17 @@ export const apiCall = async (endpoint, options = {}) => {
       const errorData = await response.json().catch(() => ({}));
 
       // 백엔드 에러 응답 구조 처리
-      // { detail: { error: { message: "..." } } } 또는 { detail: "..." } 또는 { message: "..." }
+      // { detail: { error: { message: "...", details: "..." } } } 또는 { detail: "..." } 또는 { message: "..." }
       let errorMessage = `HTTP error! status: ${response.status}`;
 
       if (errorData.detail) {
         if (typeof errorData.detail === 'string') {
           errorMessage = errorData.detail;
-        } else if (errorData.detail.error?.message) {
-          errorMessage = errorData.detail.error.message;
+        } else if (errorData.detail.error) {
+          // error 객체가 있는 경우 message와 details를 조합
+          const message = errorData.detail.error.message || '';
+          const details = errorData.detail.error.details || '';
+          errorMessage = details ? `${message}\n${details}` : message;
         } else if (errorData.detail.message) {
           errorMessage = errorData.detail.message;
         }
@@ -72,6 +75,26 @@ export const apiCall = async (endpoint, options = {}) => {
     console.error('에러 타입:', error.name);
     console.error('에러 메시지:', error.message);
     console.error('에러 전체:', error);
+    
+    // "Failed to fetch" 오류를 더 명확한 메시지로 변환
+    if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
+      const friendlyError = new Error(
+        '서버에 연결할 수 없습니다. 백엔드 서버가 실행 중인지 확인해주세요.\n' +
+        `(API URL: ${API_BASE_URL})`
+      );
+      friendlyError.name = 'NetworkError';
+      friendlyError.originalError = error;
+      throw friendlyError;
+    }
+    
+    // AbortError (타임아웃) 처리
+    if (error.name === 'AbortError') {
+      const timeoutError = new Error('요청 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.');
+      timeoutError.name = 'TimeoutError';
+      timeoutError.originalError = error;
+      throw timeoutError;
+    }
+    
     throw error;
   }
 };
@@ -198,7 +221,7 @@ export const getMessages = async (conversationId) => {
 };
 
 // 메시지 전송
-export const sendMessage = async (conversationId, query, k = 3, includeSources = true) => {
+export const sendMessage = async (conversationId, query, k = 5, includeSources = true) => {
   const token = localStorage.getItem('access_token');
   const response = await apiCall('/conversations/chat', {
     method: 'POST',

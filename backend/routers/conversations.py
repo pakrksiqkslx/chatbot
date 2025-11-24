@@ -62,14 +62,14 @@ class ChatRequest(BaseModel):
     """채팅 요청 모델"""
     conversation_id: Optional[str] = None  # None이면 자동으로 새 대화방 생성
     query: str
-    k: int = 3
+    k: int = 5
     include_sources: bool = True
 
 
 class MessageRequest(BaseModel):
     """메시지 추가 요청 모델 (RESTful용)"""
     query: str
-    k: int = 3
+    k: int = 5
     include_sources: bool = True
 
 

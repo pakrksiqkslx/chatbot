@@ -37,6 +37,37 @@ export default function Signup({ onSignup, onBack }) {
     }
   }, [location.search]);
 
+  // 팝업 창에서 이메일 인증 완료 메시지 수신 처리
+  useEffect(() => {
+    const handleMessage = (event) => {
+      // 보안을 위해 origin 확인 (프로토콜 제외하고 도메인만 비교)
+      const currentOrigin = window.location.origin;
+      const eventOrigin = event.origin;
+      
+      // 같은 도메인이면 HTTP/HTTPS 모두 허용
+      const currentDomain = currentOrigin.replace(/^https?:\/\//, '');
+      const eventDomain = eventOrigin.replace(/^https?:\/\//, '');
+      
+      if (currentDomain !== eventDomain) {
+        return;
+      }
+
+      if (event.data && event.data.type === 'EMAIL_VERIFIED') {
+        const verifiedEmail = event.data.email;
+        if (verifiedEmail && verifiedEmail.endsWith('@bu.ac.kr')) {
+          const prefix = verifiedEmail.replace('@bu.ac.kr', '');
+          setEmailPrefix(prefix);
+          setIsEmailVerified(true);
+        }
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => {
+      window.removeEventListener('message', handleMessage);
+    };
+  }, []);
+
   // 이메일 인증 코드 발송
   async function handleSendVerification() {
     if (!emailPrefix.trim()) {
@@ -60,10 +91,13 @@ export default function Signup({ onSignup, onBack }) {
       }
     } catch (error) {
       console.error('Verification email failed:', error);
-      setError('인증번호 발송에 실패했습니다. 다시 시도해주세요.');
       
-      // 개발용 폴백: API 실패 시에도 임시 코드 생성
-      if (process.env.NODE_ENV === 'development') {
+      // 백엔드에서 전달된 구체적인 에러 메시지 사용
+      const errorMessage = error.message || '인증번호 발송에 실패했습니다. 다시 시도해주세요.';
+      setError(errorMessage);
+      
+      // 개발용 폴백: API 실패 시에도 임시 코드 생성 (409 에러가 아닐 때만)
+      if (process.env.NODE_ENV === 'development' && !errorMessage.includes('이미 등록된')) {
         const code = Math.floor(100000 + Math.random() * 900000).toString();
         setSentCode(code);
         alert(`개발 모드: 인증번호 ${code}`);
@@ -134,8 +168,24 @@ export default function Signup({ onSignup, onBack }) {
       return;
     }
     
-    if (password.length < 6) {
-      setError('비밀번호는 6자 이상이어야 합니다.');
+    if (password.length < 8) {
+      setError('비밀번호는 8자 이상이어야 합니다.');
+      return;
+    }
+
+    // 비밀번호 유효성 검증 (영문, 숫자, 특수문자)
+    if (!/[a-zA-Z]/.test(password)) {
+      setError('비밀번호는 영문을 포함해야 합니다.');
+      return;
+    }
+
+    if (!/\d/.test(password)) {
+      setError('비밀번호는 숫자를 포함해야 합니다.');
+      return;
+    }
+
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+      setError('비밀번호는 특수문자를 포함해야 합니다.');
       return;
     }
 
@@ -150,14 +200,43 @@ export default function Signup({ onSignup, onBack }) {
         password: password
       });
       
-      // 회원가입 성공시 처리
+      // 회원가입 성공시 자동 로그인 처리
       console.log('Signup successful:', response);
-      alert('회원가입이 완료되었습니다. 로그인해주세요.');
-      onSignup(fullEmail);
+      
+      try {
+        // 회원가입한 이메일과 비밀번호로 자동 로그인
+        const loginResponse = await authAPI.login(fullEmail, password);
+        const accessToken = loginResponse.data?.access_token || loginResponse.access_token;
+        const userData = loginResponse.data?.user || loginResponse.user;
+
+        if (accessToken) {
+          localStorage.setItem('authToken', accessToken);
+          localStorage.setItem('access_token', accessToken);
+          localStorage.setItem('userEmail', fullEmail);
+          if (userData) {
+            localStorage.setItem('user', JSON.stringify(userData));
+          }
+          console.log('자동 로그인 완료');
+          // 로그인 성공 후 메인 페이지로 이동
+          onSignup(fullEmail);
+        } else {
+          alert('회원가입이 완료되었습니다. 로그인해주세요.');
+          onSignup(fullEmail);
+        }
+      } catch (loginError) {
+        console.error('자동 로그인 실패:', loginError);
+        alert('회원가입이 완료되었습니다. 로그인해주세요.');
+        onSignup(fullEmail);
+      }
     } catch (error) {
       console.error('Signup failed:', error);
       
-      if (error.response?.data?.message) {
+      // 네트워크 오류 처리
+      if (error.name === 'NetworkError' || error.message.includes('서버에 연결할 수 없습니다')) {
+        setError('서버에 연결할 수 없습니다. 백엔드 서버가 실행 중인지 확인해주세요.');
+      } else if (error.name === 'TimeoutError' || error.message.includes('요청 시간이 초과')) {
+        setError('요청 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.');
+      } else if (error.response?.data?.message) {
         setError(error.response.data.message);
       } else if (error.message) {
         setError(error.message);
@@ -243,7 +322,7 @@ export default function Signup({ onSignup, onBack }) {
 
         <input
           type="password"
-          placeholder="비밀번호 (6자 이상)"
+          placeholder="비밀번호 (8자 이상, 영문+숫자+특수문자)"
           value={password}
           onChange={e => setPassword(e.target.value)}
           disabled={!isEmailVerified}

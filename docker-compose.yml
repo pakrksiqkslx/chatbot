@@ -11,6 +11,7 @@ services:
       - PYTHONUNBUFFERED=1
       - ENVIRONMENT=development
       - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+      - FRONTEND_URL=http://localhost:3000
       # API 키 (환경변수에서 가져옴)
       - HYPERCLOVA_API_KEY=${HYPERCLOVA_API_KEY}
       - PINECONE_API_KEY=${PINECONE_API_KEY}
