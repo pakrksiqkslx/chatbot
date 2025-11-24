@@ -57,30 +57,29 @@ class Settings:
     # 보안 설정
     # JWT 설정과 호환: JWT_SECRET_KEY가 있으면 SECRET_KEY 기본값으로 사용
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "dev-jwt-secret-key-change-me")
+    JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
     SECRET_KEY: str = os.getenv("SECRET_KEY", JWT_SECRET_KEY)
     
     # CORS 설정 - 환경별 기본값
     DEFAULT_DEV_ORIGINS: str = "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000"
-    DEFAULT_PROD_ORIGINS: str = "https://bu-chatbot.co.kr"
+    DEFAULT_PROD_ORIGINS: str = "http://bu-chatbot.co.kr"
     ALLOWED_ORIGINS: List[str] = []
     ALLOW_ALL_ORIGINS_IN_DEV: bool = os.getenv("ALLOW_ALL_ORIGINS_IN_DEV", "false").lower() == "true"
     
     # 로깅 설정
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     
-   # MongoDB Atlas 설정
+    # MongoDB Atlas 설정
     MONGODB_URI: str = os.getenv("MONGODB_URI", "")
     MONGODB_DATABASE: str = os.getenv("MONGODB_DATABASE", "chatbot_db")
-
-    # JWT 인증 설정
-    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-this-in-production")
-    JWT_ALGORITHM: str = "HS256"
-    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))  # 24시간
 
     # SMTP 이메일 설정
     SMTP_USER: str = os.getenv("SMTP_USER", "")
     SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+    
+    # 프론트엔드 URL 설정 (이메일 인증 링크용)
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
     
     # 외부 API 설정 - HyperCLOVA X
     HYPERCLOVA_API_KEY: str = os.getenv("HYPERCLOVA_API_KEY", "")
