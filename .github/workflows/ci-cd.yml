@@ -91,7 +91,7 @@ jobs:
           export PINECONE_INDEX_NAME="test-index"
           
           # pytest 실행 및 결과 확인 (segfault 방지를 위해 결과 파싱)
-          TEST_OUTPUT=$(pytest test_main.py -v --tb=short 2>&1 || true)
+          TEST_OUTPUT=$(pytest tests/test_main.py -v --tb=short 2>&1 || true)
           echo "$TEST_OUTPUT"
           
           # 테스트 결과 확인
