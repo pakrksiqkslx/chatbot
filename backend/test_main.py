@@ -110,7 +110,7 @@ def test_chat_request_model():
     # 기본 필드 확인
     request = ChatRequest(query="테스트 질문")
     assert request.query == "테스트 질문"
-    assert request.k == 3  # 기본값
+    assert request.k == 5  # 기본값
     assert request.include_sources == True  # 기본값
     
     # 커스텀 값 확인
