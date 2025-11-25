@@ -16,7 +16,6 @@ env:
   CONTAINER_BACKEND_NAME: backend-container
   CONTAINER_FRONTEND_NAME: frontend-container
   # SSM Parameter Store paths (non-sensitive)
-  SSM_REACT_APP_API_URL: /prod/REACT_APP_API_URL
   SSM_HYPERCLOVA_API_KEY: /prod/HYPERCLOVA_API_KEY
   SSM_PINECONE_API_KEY: /prod/PINECONE_API_KEY
   SSM_PINECONE_INDEX_NAME: /prod/PINECONE_INDEX_NAME
@@ -29,7 +28,6 @@ env:
   
   # SSM 파라미터 키를 배열로 정의 (Deploy 단계에서 사용)
   SSM_KEYS: |
-    REACT_APP_API_URL
     HYPERCLOVA_API_KEY
     PINECONE_API_KEY
     PINECONE_INDEX_NAME
