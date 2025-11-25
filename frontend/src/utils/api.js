@@ -1,11 +1,14 @@
 // API 기본 설정
-// 런타임 환경변수 우선 사용 (window._env_는 nginx 시작 시 주입됨)
-const API_BASE_URL = (window._env_ && window._env_.REACT_APP_API_URL) 
-  || process.env.REACT_APP_API_URL 
-  || 'http://localhost:5000/api';
+// 개발 환경: localhost:5000 직접 연결
+// 프로덕션 환경: nginx 프록시를 통해 /api로 통일
+// nginx의 location /api/는 /api로 시작하는 모든 경로를 매칭하므로 /api만 사용해도 됨
+const API_BASE_URL = process.env.NODE_ENV === 'development' 
+  ? 'http://localhost:5000/api'
+  : '/api';
 
 // API 호출 유틸리티 함수
 export const apiCall = async (endpoint, options = {}) => {
+  // endpoint가 /로 시작하므로 그대로 연결 (예: /api + /auth/login = /api/auth/login)
   const url = `${API_BASE_URL}${endpoint}`;
 
   console.log('apiCall 시작:', url);
