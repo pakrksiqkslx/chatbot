@@ -1,12 +1,10 @@
 """
 프롬프트 관리 모듈
 """
-import os
 from pathlib import Path
-from typing import Optional
 
-# 프롬프트 디렉토리 경로
-PROMPTS_DIR = Path(__file__).parent
+# 프롬프트 디렉토리 경로 (prompts 폴더)
+PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 
 def load_prompt(filename: str) -> str:
