@@ -1,6 +1,19 @@
 """
 PINECONE API 직접 사용을 위한 벡터화 스크립트
 LangChain 호환성 문제를 우회하여 PINECONE API v5를 직접 사용
+
+사용 방법:
+    # 전체 재생성 (기존 데이터 삭제 후 재생성)
+    python backend/infrastructure/PineconeDB.py
+    
+    # 증분 업데이트 (기존 데이터 유지, 새로운 강의만 추가)
+    python backend/infrastructure/PineconeDB.py --incremental
+    
+    # 특정 JSON 파일 사용
+    python backend/infrastructure/PineconeDB.py excel_data/excel_parser/output.json --incremental
+    
+    # 강제 전체 재생성
+    python backend/infrastructure/PineconeDB.py --reset
 """
 
 import json
@@ -11,8 +24,16 @@ import numpy as np
 from tqdm import tqdm
 from dotenv import load_dotenv
 
-# .env 파일 로드
-load_dotenv()
+# 프로젝트 루트 디렉토리 찾기 (현재 파일이 backend/infrastructure 폴더에 있으므로 부모의 부모가 루트)
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+
+# .env 파일 로드 (프로젝트 루트 기준)
+env_path = PROJECT_ROOT / ".env"
+if env_path.exists():
+    load_dotenv(env_path)
+else:
+    # 루트에 없으면 현재 디렉토리에서도 시도
+    load_dotenv()
 
 # HuggingFace 임베딩 모델 사용 (한국어 특화)
 try:
@@ -29,12 +50,21 @@ import time
 class DirectPineconeVectorizer:
     """PINECONE API 직접 사용 벡터화 클래스"""
     
-    def __init__(self, json_path: str = "utils/output.json"):
+    def __init__(self, json_path: str = None):
         """
         Args:
-            json_path: 수업계획서 JSON 파일 경로
+            json_path: 수업계획서 JSON 파일 경로 (상대 경로는 프로젝트 루트 기준)
         """
-        self.json_path = json_path
+        # 기본 경로 설정 (프로젝트 루트 기준)
+        if json_path is None:
+            json_path = "excel_data/excel_parser/output.json"
+        
+        # 절대 경로가 아니면 프로젝트 루트 기준으로 변환
+        if not Path(json_path).is_absolute():
+            # 프로젝트 루트 기준 경로
+            json_path = PROJECT_ROOT / json_path
+        
+        self.json_path = str(json_path)
         self.courses_data = self._load_json()
         
         # 한국어 임베딩 모델 (jhgan/ko-sroberta-multitask)
@@ -72,6 +102,10 @@ class DirectPineconeVectorizer:
             data = json.load(f)
         print(f"[{len(data)}개 강의 데이터 로드 완료]")
         return data
+    
+    def _get_vectorstore_path(self) -> Path:
+        """vectorstore 폴더 경로 반환 (프로젝트 루트 기준)"""
+        return PROJECT_ROOT / "vectorstore"
     
     def _create_course_documents(self) -> List[Dict[str, Any]]:
         """각 강의를 문서 객체로 변환"""
@@ -274,18 +308,110 @@ class DirectPineconeVectorizer:
         print(f"[총 {len(documents)}개 문서 생성 완료]")
         return documents
     
-    def create_and_save_vectorstore(self, index_name: str = "chatbot-courses", reset: bool = True):
+    def _get_existing_courses(self, index) -> set:
+        """
+        Pinecone에서 기존 강의 목록 가져오기
+        
+        Args:
+            index: Pinecone 인덱스 객체
+            
+        Returns:
+            기존 강의 course_code 집합
+        """
+        existing_courses = set()
+        
+        try:
+            # 인덱스 통계 확인
+            stats = index.describe_index_stats()
+            total_vectors = stats.get('total_vector_count', 0)
+            
+            if total_vectors == 0:
+                print("[기존 강의 없음]")
+                return existing_courses
+            
+            print(f"[기존 벡터 수: {total_vectors}개]")
+            print("[기존 강의 목록 확인 중...]")
+            
+            # 메타데이터 필터링으로 기존 강의 확인
+            # Pinecone의 query는 벡터 검색만 가능하므로, 
+            # 더미 쿼리로 모든 문서를 가져오는 것은 비효율적
+            # 대신 로컬 파일에서 확인하는 방식 사용
+            
+            # 로컬에 저장된 처리된 강의 목록 확인 (프로젝트 루트 기준)
+            processed_file = self._get_vectorstore_path() / "processed_courses.json"
+            if processed_file.exists():
+                with open(processed_file, 'r', encoding='utf-8') as f:
+                    processed_data = json.load(f)
+                    existing_courses = set(processed_data.get('course_codes', []))
+                    print(f"[로컬에서 {len(existing_courses)}개 기존 강의 확인]")
+                    return existing_courses
+            
+            # 로컬 파일이 없으면 모든 강의를 새로 추가로 간주
+            print("[로컬 처리 기록 없음 - 모든 강의를 새로 추가로 간주]")
+            
+        except Exception as e:
+            print(f"[기존 강의 확인 실패: {e}]")
+            print("[모든 강의를 새로 추가로 간주]")
+        
+        return existing_courses
+    
+    def _save_processed_courses(self, course_codes: set):
+        """처리된 강의 목록 저장"""
+        processed_file = self._get_vectorstore_path() / "processed_courses.json"
+        processed_file.parent.mkdir(exist_ok=True)
+        
+        data = {
+            "course_codes": list(course_codes),
+            "last_updated": time.strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        with open(processed_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    
+    def create_and_save_vectorstore(self, index_name: str = "chatbot-courses", reset: bool = True, incremental: bool = False):
         """
         PINECONE에 벡터 저장
         
         Args:
             index_name: Pinecone 인덱스 이름
             reset: True이면 기존 데이터 삭제 후 재생성 (기본값: True)
+            incremental: True이면 기존 데이터 유지하고 새로운 것만 추가 (기본값: False)
         """
         # 문서 생성
-        documents = self._create_course_documents()
+        all_documents = self._create_course_documents()
         
         print(f"\n[PINECONE 벡터 스토어 생성 중: {index_name}]")
+        
+        # 증분 업데이트 모드
+        if incremental:
+            print("[증분 업데이트 모드]")
+            # 인덱스 연결
+            if index_name not in self.pc.list_indexes().names():
+                print(f"[인덱스가 없습니다. 새로 생성합니다.]")
+                reset = True  # 인덱스가 없으면 새로 생성
+            else:
+                index = self.pc.Index(index_name)
+                # 기존 강의 확인
+                existing_courses = self._get_existing_courses(index)
+                
+                # 새로운 강의만 필터링
+                new_documents = []
+                new_course_codes = set()
+                
+                for doc in all_documents:
+                    course_code = doc["metadata"].get("course_code", "")
+                    if course_code and course_code not in existing_courses:
+                        new_documents.append(doc)
+                        new_course_codes.add(course_code)
+                
+                if not new_documents:
+                    print("[새로운 강의가 없습니다. 업데이트할 내용이 없습니다.]")
+                    return index
+                
+                print(f"[새로운 강의 {len(new_course_codes)}개 발견: {', '.join(list(new_course_codes)[:5])}{'...' if len(new_course_codes) > 5 else ''}]")
+                documents = new_documents
+        else:
+            documents = all_documents
         
         # 기존 인덱스가 있으면 삭제 (reset=True인 경우)
         if reset and index_name in self.pc.list_indexes().names():
@@ -358,9 +484,24 @@ class DirectPineconeVectorizer:
         
         print(f"[PINECONE 벡터 스토어 저장 완료: {index_name}]")
         
+        # 처리된 강의 목록 저장 (증분 업데이트용)
+        if incremental:
+            # 기존 강의 목록 불러오기
+            existing_courses = self._get_existing_courses(index)
+            # 새로 추가된 강의와 합치기
+            new_course_codes = {doc["metadata"].get("course_code", "") for doc in documents if doc["metadata"].get("course_code")}
+            all_processed_courses = existing_courses | new_course_codes
+            self._save_processed_courses(all_processed_courses)
+            print(f"[처리된 강의 목록 저장 완료: 총 {len(all_processed_courses)}개]")
+        else:
+            # 전체 재생성인 경우 모든 강의 저장
+            all_course_codes = {doc["metadata"].get("course_code", "") for doc in all_documents if doc["metadata"].get("course_code")}
+            self._save_processed_courses(all_course_codes)
+            print(f"[처리된 강의 목록 저장 완료: 총 {len(all_course_codes)}개]")
+        
         # 메타데이터 통계 저장
-        metadata_stats = self._get_metadata_stats(documents)
-        stats_path = Path("vectorstore") / "metadata_stats.json"
+        metadata_stats = self._get_metadata_stats(documents if not incremental else all_documents)
+        stats_path = self._get_vectorstore_path() / "metadata_stats.json"
         stats_path.parent.mkdir(exist_ok=True)
         with open(stats_path, 'w', encoding='utf-8') as f:
             json.dump(metadata_stats, indent=2, ensure_ascii=False, fp=f)
@@ -412,15 +553,40 @@ class DirectPineconeVectorizer:
 
 def main():
     """메인 실행 함수"""
+    import sys
+    
+    # 명령줄 인자 확인
+    incremental = "--incremental" in sys.argv or "-i" in sys.argv
+    reset = "--reset" in sys.argv or "-r" in sys.argv
+    
     print("=" * 60)
     print("[수업계획서 벡터화 시작 - PINECONE 직접 사용]")
     print("=" * 60)
     
-    # 벡터라이저 생성
-    vectorizer = DirectPineconeVectorizer(json_path="utils/output.json")
+    if incremental:
+        print("[모드: 증분 업데이트 (기존 데이터 유지, 새로운 강의만 추가)]")
+    elif reset:
+        print("[모드: 전체 재생성 (기존 데이터 삭제 후 재생성)]")
+    else:
+        print("[모드: 전체 재생성 (기본값)]")
+        print("[힌트: --incremental 또는 -i 옵션으로 증분 업데이트 가능]")
     
-    # 벡터 스토어 생성 및 저장 (기존 데이터 삭제 후 재생성)
-    index = vectorizer.create_and_save_vectorstore(index_name="chatbot-courses", reset=True)
+    # 벡터라이저 생성
+    # 명령줄 인자에서 JSON 경로 추출 (상대 경로는 프로젝트 루트 기준)
+    json_path = None
+    for arg in sys.argv[1:]:
+        if not arg.startswith("--") and not arg.startswith("-"):
+            json_path = arg
+            break
+    
+    vectorizer = DirectPineconeVectorizer(json_path=json_path)
+    
+    # 벡터 스토어 생성 및 저장
+    index = vectorizer.create_and_save_vectorstore(
+        index_name="chatbot-courses", 
+        reset=reset or not incremental,  # incremental이면 reset=False
+        incremental=incremental
+    )
     
     print("\n" + "=" * 60)
     print("[PINECONE 벡터화 완료!]")
@@ -457,3 +623,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
