@@ -63,7 +63,7 @@ class Settings:
     
     # CORS 설정 - 환경별 기본값
     DEFAULT_DEV_ORIGINS: str = "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000"
-    DEFAULT_PROD_ORIGINS: str = "http://bu-chatbot.co.kr"
+    DEFAULT_PROD_ORIGINS: str = "http://bu-chatbot.co.kr,https://bu-chatbot.co.kr"
     ALLOWED_ORIGINS: List[str] = []
     ALLOW_ALL_ORIGINS_IN_DEV: bool = os.getenv("ALLOW_ALL_ORIGINS_IN_DEV", "false").lower() == "true"
     

@@ -53,8 +53,9 @@ else:
 
 # 보안 미들웨어 설정 (나중에 추가 - 먼저 실행됨)
 # TrustedHostMiddleware는 개발 환경에서는 비활성화 (OPTIONS 요청 문제 방지)
-if settings.ENVIRONMENT == "production":
-    allowed_hosts = ["*.bu-chatbot.co.kr"]
+# 프로덕션에서는 환경변수로 제어 (기본값: 비활성화 - ECS/nginx 프록시 환경에서는 호스트 검증 불필요)
+if settings.ENVIRONMENT == "production" and os.getenv("ENABLE_TRUSTED_HOST", "false").lower() in ("1", "true", "yes"):
+    allowed_hosts = ["*.bu-chatbot.co.kr", "bu-chatbot.co.kr"]
     
     # 내부 테스트/헬스체크 용도로 로컬호스트를 허용하려면
     # 환경변수 ALLOW_LOCALHOST_IN_PROD=true 로 켜십시오.
@@ -64,6 +65,25 @@ if settings.ENVIRONMENT == "production":
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
 
 router = APIRouter(prefix=settings.API_PREFIX)
+
+# 400 Bad Request 핸들러 추가
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """HTTP 예외 핸들러 - 400 에러 등 상세 로깅"""
+    logger.warning(
+        f"HTTP {exc.status_code} Error - {request.method} {request.url.path} | "
+        f"Host: {request.headers.get('host', 'unknown')} | "
+        f"Origin: {request.headers.get('origin', 'none')} | "
+        f"Detail: {exc.detail}"
+    )
+    
+    # 원본 응답 반환
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail}
+    )
 
 # Validation Error 핸들러 추가 (422 에러 로깅)
 @app.exception_handler(RequestValidationError)
@@ -80,7 +100,10 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         })
     
     logger.warning(
-        f"Validation Error - {request.method} {request.url.path}: {error_details}"
+        f"Validation Error - {request.method} {request.url.path} | "
+        f"Host: {request.headers.get('host', 'unknown')} | "
+        f"Origin: {request.headers.get('origin', 'none')} | "
+        f"Errors: {error_details}"
     )
     
     # 기본 FastAPI validation error 응답 반환
