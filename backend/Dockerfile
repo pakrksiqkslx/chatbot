@@ -21,7 +21,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 # 애플리케이션 코드 복사
 COPY . .
 
-# 포트 노출 (config 기본 5000)
+# 포트 노출 (config 기본 5000)a
 EXPOSE 5000
 
 # Uvicorn으로 FastAPI 실행 (ECS 환경변수로 포트/워커/로그레벨 제어)
