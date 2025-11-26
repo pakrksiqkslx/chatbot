@@ -2,9 +2,7 @@
 // 개발 환경: localhost:5000 직접 연결
 // 프로덕션 환경: nginx 프록시를 통해 /api로 통일
 // nginx의 location /api/는 /api로 시작하는 모든 경로를 매칭하므로 /api만 사용해도 됨
-const API_BASE_URL = process.env.NODE_ENV === 'development' 
-  ? 'http://localhost:5000/api'
-  : '/api';
+const API_BASE_URL = process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:5000/api';
 
 // API 호출 유틸리티 함수
 export const apiCall = async (endpoint, options = {}) => {
